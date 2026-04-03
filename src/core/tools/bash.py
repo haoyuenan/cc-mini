@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import locale
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,42 @@ if TYPE_CHECKING:
     from ..sandbox.manager import SandboxManager
 
 _DEFAULT_TIMEOUT = 120
+
+
+def _decode_process_output(data: bytes | str | None) -> str:
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data
+
+    raw = bytes(data)
+
+    preferred = locale.getpreferredencoding(False) or "utf-8"
+    candidates: list[str] = []
+    for encoding in ("utf-8", "utf-8-sig"):
+        if encoding not in candidates:
+            candidates.append(encoding)
+
+    for encoding in candidates:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    non_ascii_bytes = sum(1 for byte in raw if byte >= 0x80)
+    if non_ascii_bytes and non_ascii_bytes <= max(3, len(raw) // 8):
+        return raw.decode("utf-8", errors="replace")
+
+    if preferred not in candidates:
+        candidates.append(preferred)
+
+    for encoding in candidates[2:]:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return raw.decode(preferred, errors="replace")
 
 
 class BashTool(Tool):
@@ -49,13 +86,15 @@ class BashTool(Tool):
 
         try:
             result = subprocess.run(
-                actual_command, shell=True, capture_output=True, text=True, timeout=timeout
+                actual_command, shell=True, capture_output=True, timeout=timeout
             )
             parts = []
-            if result.stdout:
-                parts.append(result.stdout.rstrip())
-            if result.stderr:
-                parts.append(f"[stderr]\n{result.stderr.rstrip()}")
+            stdout = _decode_process_output(result.stdout).rstrip()
+            stderr = _decode_process_output(result.stderr).rstrip()
+            if stdout:
+                parts.append(stdout)
+            if stderr:
+                parts.append(f"[stderr]\n{stderr}")
             if result.returncode != 0:
                 parts.append(f"[exit code: {result.returncode}]")
             return ToolResult(content="\n".join(parts) if parts else "(no output)")
