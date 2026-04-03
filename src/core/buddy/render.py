@@ -24,17 +24,81 @@ from .types import (
 
 from rich.table import Table
 
+from ..i18n import DEFAULT_LOCALE, t
+
 
 def _stat_bar(value: int, width: int = 20) -> str:
     filled = round(value / 100 * width)
     return '\u2588' * filled + '\u2591' * (width - filled)
 
 
-def render_companion_card(companion: Companion, console: Console) -> None:
+def _buddy_card_title(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.card.title')
+
+
+def _buddy_rarity_label(rarity: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, f'buddy.rarity.{rarity}')
+
+
+def _buddy_card_identity_line(name: str, species: str, shiny: bool, locale: str = DEFAULT_LOCALE) -> str:
+    shiny_tag = ' ✨ SHINY' if shiny and locale != 'zh-CN' else (' ✨ 闪光' if shiny else '')
+    return t(locale, 'buddy.render.card.identity', name=name, species=species, shiny_tag=shiny_tag)
+
+
+def _buddy_card_mood_heading(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.card.mood')
+
+
+def _buddy_card_feeling_line(mood: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.card.feeling', mood=mood)
+
+
+def _buddy_card_hatched_line(date: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.card.hatched', date=date)
+
+
+def _buddy_compact_status_line(face: str, name: str, species: str, mood: str, shiny: bool, locale: str = DEFAULT_LOCALE, stars: str = '★') -> str:
+    shiny_tag = ' ✨' if shiny else ''
+    return t(locale, 'buddy.render.compact', face=face, name=name, species=species, stars=stars, shiny=shiny_tag, mood=mood)
+
+
+def _buddy_list_empty_message(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.empty')
+
+
+def _buddy_list_title(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.title')
+
+
+def _buddy_list_column_name(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.column.name')
+
+
+def _buddy_list_column_species(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.column.species')
+
+
+def _buddy_list_column_rarity(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.column.rarity')
+
+
+def _buddy_list_column_shiny(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.column.shiny')
+
+
+def _buddy_list_column_face(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.render.list.column.face')
+
+
+def _buddy_hatch_reveal_line(name: str, stars: str, shiny: bool, locale: str = DEFAULT_LOCALE) -> str:
+    shiny_tag = ' ✨ SHINY!' if shiny and locale != 'zh-CN' else (' ✨ 闪光！' if shiny else '')
+    return t(locale, 'buddy.render.hatch.reveal', name=name, stars=stars, shiny_tag=shiny_tag)
+
+
+def render_companion_card(companion: Companion, console: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Display a full companion card with sprite, stats, and info."""
     color = RARITY_COLORS.get(companion.rarity, 'dim')
     stars = RARITY_STARS.get(companion.rarity, '\u2605')
-    shiny_tag = ' \u2728 SHINY' if companion.shiny else ''
 
     sprite_lines = render_sprite(
         CompanionBones(
@@ -50,8 +114,8 @@ def render_companion_card(companion: Companion, console: Console) -> None:
 
     # Build card content
     lines: list[str] = []
-    lines.append(f'  {companion.name} the {companion.species}{shiny_tag}')
-    lines.append(f'  {stars}  ({companion.rarity})')
+    lines.append(f"  {_buddy_card_identity_line(companion.name, companion.species, companion.shiny, locale)}")
+    lines.append(f"  {stars}  ({_buddy_rarity_label(companion.rarity, locale)})")
     lines.append('')
 
     # Sprite
@@ -71,24 +135,24 @@ def render_companion_card(companion: Companion, console: Console) -> None:
 
     # Mood
     lines.append('')
-    lines.append('  Mood:')
+    lines.append(f"  {_buddy_card_mood_heading(locale)}")
     mood = companion.mood
     for dim in MOOD_DIMENSIONS:
         val = getattr(mood, dim)
         bar = _stat_bar(val)
         lines.append(f'  {dim.capitalize():<10} {bar} {val:>3}')
-    lines.append(f'  Feeling: {mood.dominant().lower()}')
+    lines.append(f"  {_buddy_card_feeling_line(mood.dominant().lower(), locale)}")
 
     # Hatched date
     from datetime import datetime, timezone
     hatched = datetime.fromtimestamp(companion.hatched_at / 1000, tz=timezone.utc)
     lines.append('')
-    lines.append(f'  Hatched: {hatched.strftime("%Y-%m-%d")}')
+    lines.append(f"  {_buddy_card_hatched_line(hatched.strftime('%Y-%m-%d'), locale)}")
 
     content = '\n'.join(lines)
     panel = Panel(
         Text.from_ansi(content),
-        title=f'[{color}]\u2605 Companion \u2605[/{color}]',
+        title=f"[{color}]{_buddy_card_title(locale)}[/{color}]",
         border_style=color,
         padding=(1, 2),
     )
@@ -96,7 +160,7 @@ def render_companion_card(companion: Companion, console: Console) -> None:
 
 
 def render_hatch_animation(
-    bones: CompanionBones, soul: CompanionSoul, console: Console
+    bones: CompanionBones, soul: CompanionSoul, console: Console, locale: str = DEFAULT_LOCALE
 ) -> None:
     """Show egg wobble → crack → shatter → reveal animation.
 
@@ -163,8 +227,6 @@ def render_hatch_animation(
     wobble_count = rarity_wobbles.get(bones.rarity, 2)
 
     sprite = render_sprite(bones)
-    shiny_tag = ' \u2728 SHINY!' if bones.shiny else ''
-
     with Live(console=console, refresh_per_second=8, transient=False) as live:
         # Phase 1: Wobble — egg rocks with increasing speed
         wobble_frames = [egg_center, egg_left, egg_center, egg_right]
@@ -197,8 +259,8 @@ def render_hatch_animation(
         # Phase 4: Reveal — companion appears
         reveal_lines = [f'  {line}' for line in sprite]
         reveal_lines.append('')
-        reveal_lines.append(f'  {soul.name} hatched! {stars}{shiny_tag}')
-        reveal_lines.append(f'  {bones.rarity.upper()} {bones.species}')
+        reveal_lines.append(f"  {_buddy_hatch_reveal_line(soul.name, stars, bones.shiny, locale)}")
+        reveal_lines.append(f"  {_buddy_rarity_label(bones.rarity, locale)} {bones.species}")
         reveal_lines.append(f'  "{soul.personality}"')
         text = Text('\n'.join(reveal_lines), style=f'bold {color}')
         live.update(text)
@@ -207,7 +269,7 @@ def render_hatch_animation(
     console.print()  # Clean newline after animation
 
 
-def render_compact_status(companion: Companion) -> str:
+def render_compact_status(companion: Companion, locale: str = DEFAULT_LOCALE) -> str:
     """One-liner companion status for display before the REPL prompt."""
     face = render_face(
         CompanionBones(
@@ -220,9 +282,8 @@ def render_compact_status(companion: Companion) -> str:
         )
     )
     stars = RARITY_STARS.get(companion.rarity, '\u2605')
-    shiny = ' \u2728' if companion.shiny else ''
     dominant = companion.mood.dominant().lower()
-    return f'  {face} {companion.name} the {companion.species} {stars}{shiny} ({dominant})'
+    return '  ' + _buddy_compact_status_line(face, companion.name, companion.species, dominant, companion.shiny, locale, stars=stars)
 
 
 def render_speech_bubble(text: str, color: str = 'dim') -> str:
@@ -279,20 +340,20 @@ def render_speech_bubble_rich(
 
 
 def render_companion_list(
-    companions: list[Companion], active_index: int, console: Console
+    companions: list[Companion], active_index: int, console: Console, locale: str = DEFAULT_LOCALE
 ) -> None:
     """Render a table of all owned companions (仓库)."""
     if not companions:
-        console.print('[dim]No companions yet. Type /buddy to hatch one![/dim]')
+        console.print(f"[dim]{_buddy_list_empty_message(locale)}[/dim]")
         return
 
-    table = Table(title='Companion Collection', border_style='dim', padding=(0, 1))
+    table = Table(title=_buddy_list_title(locale), border_style='dim', padding=(0, 1))
     table.add_column('#', style='dim', width=3)
-    table.add_column('Name', min_width=12)
-    table.add_column('Species', min_width=10)
-    table.add_column('Rarity', min_width=10)
-    table.add_column('Face', min_width=8)
-    table.add_column('Shiny', width=5)
+    table.add_column(_buddy_list_column_name(locale), min_width=12)
+    table.add_column(_buddy_list_column_species(locale), min_width=10)
+    table.add_column(_buddy_list_column_rarity(locale), min_width=10)
+    table.add_column(_buddy_list_column_face(locale), min_width=8)
+    table.add_column(_buddy_list_column_shiny(locale), width=5)
 
     for i, comp in enumerate(companions):
         color = RARITY_COLORS.get(comp.rarity, 'dim')
@@ -310,7 +371,7 @@ def render_companion_list(
             f'{marker}{i + 1}',
             f'[{color}]{comp.name}[/{color}]',
             comp.species,
-            f'[{color}]{stars} {comp.rarity}[/{color}]',
+            f"[{color}]{stars} {_buddy_rarity_label(comp.rarity, locale)}[/{color}]",
             face,
             shiny_mark,
         )

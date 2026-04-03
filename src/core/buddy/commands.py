@@ -35,6 +35,47 @@ from .storage import (
 )
 from .types import CompanionBones, CompanionSoul
 
+
+def _buddy_hatch_start_message(is_new: bool, locale: str = DEFAULT_LOCALE) -> str:
+    key = 'buddy.hatch.start.new' if is_new else 'buddy.hatch.start.existing'
+    return t(locale, key)
+
+
+def _buddy_hatch_failed_message(error: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.hatch.failed', error=error)
+
+
+def _buddy_select_usage_message(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.select.usage')
+
+
+def _buddy_select_invalid_number_message(count: int, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.select.invalid', count=count)
+
+
+def _buddy_select_switched_message(index: int, name: str, species: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.select.switched', index=index, name=name, species=species)
+
+
+def _buddy_usage_message(locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.usage')
+
+
+def _buddy_pet_reaction_message(name: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.pet.reaction', name=name)
+
+
+def _buddy_mood_title(name: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.mood.title', name=name)
+
+
+def _buddy_mood_level_label(level: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, f'buddy.mood.level.{level}')
+
+
+def _buddy_dominant_mood_message(mood: str, locale: str = DEFAULT_LOCALE) -> str:
+    return t(locale, 'buddy.mood.dominant', mood=mood)
+
 def _generate_soul(
     bones: CompanionBones,
     client: LLMClient,
@@ -80,19 +121,19 @@ def _generate_soul(
     return CompanionSoul(name=name, personality=personality)
 
 
-def _hatch(client: LLMClient, console: Console, model: str) -> None:
+def _hatch(client: LLMClient, console: Console, model: str, locale: str = DEFAULT_LOCALE) -> None:
     """Hatch a new companion: generate bones, call API for soul, save, animate."""
     roll.cache_clear()  # ensure fresh roll (seed may have changed)
     user_id = companion_user_id()
     r = roll(user_id)
     bones = r.bones
 
-    console.print(f'\n[dim]Hatching your companion...[/dim]')
+    console.print(f'\n[dim]{_buddy_hatch_start_message(False, locale)}[/dim]')
 
     try:
         soul = _generate_soul(bones, client, model)
     except Exception as e:
-        console.print(f'[red]Failed to generate companion soul: {e}[/red]')
+        console.print(f"[red]{_buddy_hatch_failed_message(str(e), locale)}[/red]")
         # Fallback soul
         soul = CompanionSoul(
             name='Buddy',
@@ -100,39 +141,39 @@ def _hatch(client: LLMClient, console: Console, model: str) -> None:
         )
 
     save_stored_companion(soul)
-    render_hatch_animation(bones, soul, console)
+    render_hatch_animation(bones, soul, console, locale=locale)
 
     companion = get_companion()
     if companion:
-        render_companion_card(companion, console)
+        render_companion_card(companion, console, locale=locale)
 
 
-def _hatch_new(client: LLMClient, console: Console, model: str) -> None:
+def _hatch_new(client: LLMClient, console: Console, model: str, locale: str = DEFAULT_LOCALE) -> None:
     """Hatch an additional random companion with a unique seed."""
     seed = f'buddy-new-{uuid.uuid4()}'
     r = roll_with_seed(seed)
     bones = r.bones
 
-    console.print(f'\n[dim]Hatching a new companion...[/dim]')
+    console.print(f'\n[dim]{_buddy_hatch_start_message(True, locale)}[/dim]')
 
     try:
         soul = _generate_soul(bones, client, model)
     except Exception as e:
-        console.print(f'[red]Failed to generate companion soul: {e}[/red]')
+        console.print(f"[red]{_buddy_hatch_failed_message(str(e), locale)}[/red]")
         soul = CompanionSoul(
             name='Buddy',
             personality=f'A quiet {bones.species} who prefers actions over words.',
         )
 
     save_new_companion(soul, seed)
-    render_hatch_animation(bones, soul, console)
+    render_hatch_animation(bones, soul, console, locale=locale)
 
     companion = get_companion()
     if companion:
-        render_companion_card(companion, console)
+        render_companion_card(companion, console, locale=locale)
 
 
-def _pet_animation(console: Console) -> None:
+def _pet_animation(console: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Show a heart animation when petting the companion.
 
     Matches CompanionSprite.tsx PET_HEARTS: 5-frame heart float
@@ -176,7 +217,7 @@ def _pet_animation(console: Console) -> None:
             live.update(frame_text)
             time.sleep(0.5)
 
-    console.print(f'[dim]{companion.name} wiggles happily.[/dim]')
+    console.print(f"[dim]{_buddy_pet_reaction_message(companion.name, locale)}[/dim]")
 
     # Pet boosts mood
     try:
@@ -191,25 +232,25 @@ def _pet_animation(console: Console) -> None:
         pass
 
 
-def _render_mood(companion, console: Console) -> None:
+def _render_mood(companion, console: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Show mood detail for a companion."""
     from .types import RARITY_COLORS, MOOD_DIMENSIONS, MOOD_NEUTRAL
     from .render import _stat_bar
 
     color = RARITY_COLORS.get(companion.rarity, 'dim')
     mood = companion.mood
-    console.print(f'\n[{color}]{companion.name}\'s mood:[/{color}]')
+    console.print(f"\n[{color}]{_buddy_mood_title(companion.name, locale)}[/{color}]")
     for dim in MOOD_DIMENSIONS:
         val = getattr(mood, dim)
         bar = _stat_bar(val)
         if abs(val - MOOD_NEUTRAL) < 10:
-            label = 'neutral'
+            label = _buddy_mood_level_label('neutral', locale)
         elif val > MOOD_NEUTRAL:
-            label = 'high'
+            label = _buddy_mood_level_label('high', locale)
         else:
-            label = 'low'
+            label = _buddy_mood_level_label('low', locale)
         console.print(f'  {dim.capitalize():<10} {bar} {val:>3} ({label})')
-    console.print(f'\n[dim]Dominant mood: {mood.dominant().lower()}[/dim]')
+    console.print(f"\n[dim]{_buddy_dominant_mood_message(mood.dominant().lower(), locale)}[/dim]")
 
 
 def _render_help(console: Console, locale: str = DEFAULT_LOCALE) -> None:
@@ -242,9 +283,9 @@ def handle_buddy_command(
         # Hatch or show card
         companion = get_companion()
         if companion:
-            render_companion_card(companion, console)
+            render_companion_card(companion, console, locale=locale)
         else:
-            _hatch(client, console, model)
+            _hatch(client, console, model, locale=locale)
 
     elif subcmd == 'help':
         _render_help(console, locale=locale)
@@ -254,14 +295,14 @@ def handle_buddy_command(
         if not companion:
             console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
-            _pet_animation(console)
+            _pet_animation(console, locale=locale)
 
     elif subcmd == 'stats':
         companion = get_companion()
         if not companion:
             console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
-            render_companion_card(companion, console)
+            render_companion_card(companion, console, locale=locale)
 
     elif subcmd == 'mute':
         save_companion_muted(True)
@@ -276,37 +317,35 @@ def handle_buddy_command(
         if not companion:
             console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
-            _render_mood(companion, console)
+            _render_mood(companion, console, locale=locale)
 
     elif subcmd == 'ia':
         from .poke_game import start_game
         start_game(client, console, model)
 
     elif subcmd == 'new':
-        _hatch_new(client, console, model)
+        _hatch_new(client, console, model, locale=locale)
 
     elif subcmd == 'list':
         companions = get_all_companions()
         active = load_active_index()
-        render_companion_list(companions, active, console)
+        render_companion_list(companions, active, console, locale=locale)
 
     elif subcmd.startswith('select'):
         parts = subcmd.split()
         if len(parts) != 2 or not parts[1].isdigit():
-            console.print('[dim]Usage: /buddy select <number> (e.g. /buddy select 2)[/dim]')
+            console.print(f"[dim]{_buddy_select_usage_message(locale)}[/dim]")
         else:
             n = int(parts[1])
             companions = get_all_companions()
             if n < 1 or n > len(companions):
-                console.print(f'[dim]Invalid number. You have {len(companions)} companion(s). Use 1-{len(companions)}.[/dim]')
+                console.print(f"[dim]{_buddy_select_invalid_number_message(len(companions), locale)}[/dim]")
             else:
                 idx = n - 1
                 save_active_index(idx)
                 comp = companions[idx]
-                console.print(f'[bold]Switched to #{n}: {comp.name} the {comp.species}[/bold]')
-                render_companion_card(comp, console)
+                console.print(f"[bold]{_buddy_select_switched_message(n, comp.name, comp.species, locale)}[/bold]")
+                render_companion_card(comp, console, locale=locale)
 
     else:
-        console.print(
-            '[dim]Usage: /buddy [help|pet|stats|mood|new|list|select N|mute|unmute|ia][/dim]'
-          )
+        console.print(f"[dim]{_buddy_usage_message(locale)}[/dim]")

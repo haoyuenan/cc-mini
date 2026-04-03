@@ -85,11 +85,13 @@ def _cmd_compact(ctx: CommandContext, args: str) -> None:
 
     messages = ctx.engine.get_messages()
     if len(messages) < 4:
-        ctx.console.print("[dim]Too few messages to compact.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.compact.too_few')}[/dim]")
         return
 
     pre_tokens = estimate_tokens(messages)
-    ctx.console.print(f"[dim]Compacting {len(messages)} messages (~{pre_tokens:,} tokens)…[/dim]")
+    ctx.console.print(
+        f"[dim]{_tr(ctx, 'commands.compact.running', message_count=len(messages), pre_tokens=f'{pre_tokens:,}')}[/dim]"
+    )
 
     new_msgs, summary = ctx.compact_service.compact(
         messages, ctx.engine.get_system_prompt(), custom_instructions=args,
@@ -102,8 +104,8 @@ def _cmd_compact(ctx: CommandContext, args: str) -> None:
 
     post_tokens = estimate_tokens(new_msgs)
     ctx.console.print(
-        f"[green]✓[/green] Compacted: {pre_tokens:,} → {post_tokens:,} tokens "
-        f"({len(messages)} → {len(new_msgs)} messages)"
+        f"[green]✓[/green] "
+        f"{_tr(ctx, 'commands.compact.done', pre_tokens=f'{pre_tokens:,}', post_tokens=f'{post_tokens:,}', before_count=len(messages), after_count=len(new_msgs))}"
     )
 
 
@@ -131,15 +133,15 @@ def _cmd_history(ctx: CommandContext, args: str) -> None:
     cwd = str(os.getcwd())
     sessions = SessionStore.list_sessions(cwd)
     if not sessions:
-        ctx.console.print("[dim]No saved sessions for this directory.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.history.empty')}[/dim]")
         return
 
-    table = Table(title="Session History", show_header=True, header_style="bold cyan")
-    table.add_column("#", style="dim", width=4)
-    table.add_column("ID", style="dim", width=10)
-    table.add_column("Title")
-    table.add_column("Messages", justify="right", width=8)
-    table.add_column("Updated", width=20)
+    table = Table(title=_tr(ctx, "commands.history.title"), show_header=True, header_style="bold cyan")
+    table.add_column(_tr(ctx, "commands.history.column_index"), style="dim", width=4)
+    table.add_column(_tr(ctx, "commands.history.column_id"), style="dim", width=10)
+    table.add_column(_tr(ctx, "commands.history.column_title"))
+    table.add_column(_tr(ctx, "commands.history.column_messages"), justify="right", width=8)
+    table.add_column(_tr(ctx, "commands.history.column_updated"), width=20)
 
     for i, meta in enumerate(sessions, 1):
         table.add_row(
@@ -159,13 +161,13 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
     sessions = SessionStore.list_sessions(cwd)
 
     if not sessions:
-        ctx.console.print("[dim]No saved sessions to resume.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.resume.empty')}[/dim]")
         return
 
     if not args:
         # Show list and ask user to pick
         _cmd_history(ctx, "")
-        ctx.console.print("\n[dim]Usage: /resume <number> or /resume <session-id>[/dim]")
+        ctx.console.print(f"\n[dim]{_tr(ctx, 'commands.resume.usage')}[/dim]")
         return
 
     # Try as numeric index
@@ -186,18 +188,18 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
                 break
 
     if target_meta is None:
-        ctx.console.print(f"[red]Session not found: {args}[/red]")
+        ctx.console.print(f"[red]{_tr(ctx, 'commands.resume.not_found', value=args)}[/red]")
         return
 
     # Skip if resuming the current session
     if ctx.session_store and target_meta.session_id == ctx.session_store.session_id:
-        ctx.console.print("[dim]Already in this session.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.resume.already_current')}[/dim]")
         return
 
     # Load messages
     meta, messages = SessionStore.load_session(target_meta.session_id, cwd)
     if not messages:
-        ctx.console.print("[red]Session has no messages.[/red]")
+        ctx.console.print(f"[red]{_tr(ctx, 'commands.resume.no_messages')}[/red]")
         return
 
     restored_locale = meta.locale if meta is not None and meta.locale else DEFAULT_LOCALE
@@ -228,14 +230,15 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
         ctx.session_store = resumed_store  # type: ignore[assignment]
 
     ctx.console.print(
-        f"[green]✓[/green] Resumed session [bold]{target_meta.session_id[:8]}[/bold]: "
-        f"{target_meta.title[:50]}  ({len(messages)} messages)"
+        f"[green]✓[/green] "
+        f"{_tr(ctx, 'commands.resume.success', session_id=target_meta.session_id[:8], title=target_meta.title[:50], message_count=len(messages))}"
     )
     if warning:
         ctx.console.print(f"[yellow]{warning}[/yellow]")
 
 
 def _cmd_clear(ctx: CommandContext, args: str) -> None:
+    confirmation = t(ctx.locale or DEFAULT_LOCALE, "commands.clear.done")
     ctx.engine.set_messages([])
     if callable(ctx.set_locale):
         ctx.set_locale(DEFAULT_LOCALE)  # type: ignore[misc]
@@ -246,7 +249,7 @@ def _cmd_clear(ctx: CommandContext, args: str) -> None:
         ctx.session_store = new_store  # type: ignore[assignment]
         if hasattr(new_store, "persist_metadata"):
             new_store.persist_metadata()
-    ctx.console.print("[green]✓[/green] Conversation cleared. New session started.")
+    ctx.console.print(f"[green]✓[/green] {confirmation}")
 
 
 def _cmd_language(ctx: CommandContext, args: str) -> None:
@@ -298,31 +301,31 @@ def _cmd_memory(ctx: CommandContext, args: str) -> None:
     from .memory import load_memory_index
 
     if ctx.memory_dir is None:
-        ctx.console.print("[dim]Memory system not configured.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.memory.not_configured')}[/dim]")
         return
     index = load_memory_index(ctx.memory_dir)
     if index:
         ctx.console.print(index)
     else:
-        ctx.console.print("[dim]No memories yet. Use /dream to consolidate daily logs.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.memory.empty')}[/dim]")
 
 
 def _cmd_remember(ctx: CommandContext, args: str) -> None:
     from .memory import append_to_daily_log
 
     if ctx.memory_dir is None:
-        ctx.console.print("[dim]Memory system not configured.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.memory.not_configured')}[/dim]")
         return
     if not args.strip():
-        ctx.console.print("[dim]Usage: /remember <text>[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.remember.usage')}[/dim]")
         return
     append_to_daily_log(ctx.memory_dir, args.strip())
-    ctx.console.print("[dim]Saved to daily log.[/dim]")
+    ctx.console.print(f"[dim]{_tr(ctx, 'commands.remember.saved')}[/dim]")
 
 
 def _cmd_dream(ctx: CommandContext, args: str) -> None:
     if ctx.run_dream is None or not callable(ctx.run_dream):
-        ctx.console.print("[dim]Dream not available.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.dream.unavailable')}[/dim]")
         return
     ctx.run_dream()
 
@@ -333,20 +336,20 @@ def _cmd_skills(ctx: CommandContext, args: str) -> None:
 
     skills = list_skills(user_invocable_only=True)
     if not skills:
-        ctx.console.print("[dim]No skills available.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.skills.empty')}[/dim]")
         return
 
-    table = Table(title="Available Skills", show_header=True, header_style="bold cyan")
-    table.add_column("Command", style="green")
-    table.add_column("Source", style="dim", width=8)
-    table.add_column("Description")
+    table = Table(title=_tr(ctx, "commands.skills.title"), show_header=True, header_style="bold cyan")
+    table.add_column(_tr(ctx, "commands.skills.column_command"), style="green")
+    table.add_column(_tr(ctx, "commands.skills.column_source"), style="dim", width=8)
+    table.add_column(_tr(ctx, "commands.skills.column_description"))
     for s in skills:
         hint = f" [{s.argument_hint}]" if s.argument_hint else ""
         table.add_row(f"/{s.name}{hint}", s.source, s.description)
     ctx.console.print(table)
 def _cmd_cost(ctx: CommandContext, args: str) -> None:
     if ctx.cost_tracker is None:
-        ctx.console.print("[dim]Cost tracking is not available.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.cost.unavailable')}[/dim]")
         return
     ctx.console.print(ctx.cost_tracker.format_cost())
 
@@ -360,15 +363,15 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
         ctx.engine.set_model(args.strip())
         actual = ctx.engine.get_model()
         ctx.console.print(
-            f"[green]✓[/green] Set model to [bold]{actual}[/bold]  "
-            f"(max_tokens={default_max_tokens_for_model(actual, provider=provider)})")
+            f"[green]✓[/green] "
+            f"{_tr(ctx, 'commands.model.set', actual=actual, max_tokens=default_max_tokens_for_model(actual, provider=provider))}")
         return
 
     if provider != "anthropic":
         current = ctx.engine.get_model()
         ctx.console.print(
-            f"[dim]Current model: {current}[/dim]\n"
-            f"[dim]Use /model <name> to switch models for the {provider} provider.[/dim]"
+            f"[dim]{_tr(ctx, 'commands.model.current', current=current)}[/dim]\n"
+            f"[dim]{_tr(ctx, 'commands.model.usage', provider=provider)}[/dim]"
         )
         return
 
@@ -393,10 +396,14 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
     # (alias, label, description) — from modelOptions.ts PAYG 1P path
     # 1M context variants omitted: require SDK betas not available in cc-mini
     options = [
-        (DEFAULT_MODEL, "Default (recommended)", f"Use the default model (currently {display}) · $3/$15 per Mtok"),
-        ("sonnet",      "Sonnet",                "Sonnet 4.6 · Best for everyday tasks · $3/$15 per Mtok"),
-        ("opus",        "Opus",                  "Opus 4.6 · Most capable for complex work · $5/$25 per Mtok"),
-        ("haiku",       "Haiku",                 "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok"),
+        (
+            DEFAULT_MODEL,
+            _tr(ctx, "commands.model.picker.default_label"),
+            _tr(ctx, "commands.model.picker.default_desc", display=display),
+        ),
+        ("sonnet", "Sonnet", _tr(ctx, "commands.model.picker.sonnet_desc")),
+        ("opus", "Opus", _tr(ctx, "commands.model.picker.opus_desc")),
+        ("haiku", "Haiku", _tr(ctx, "commands.model.picker.haiku_desc")),
     ]
 
     effort_levels = ["low", "medium", "high"]
@@ -440,9 +447,10 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
     def _(e): e.app.exit()
 
     def _tokens():
-        t = [("bold ansibrightcyan", "  Select model\n"),
-             ("ansigray", "  Switch between Claude models. Applies to this session and future\n"
-                          "  Claude Code sessions. For other/previous model names, specify with --model.\n\n")]
+        t = [
+            ("bold ansibrightcyan", f"  {_tr(ctx, 'commands.model.picker.select')}\n"),
+            ("ansigray", f"  {_tr(ctx, 'commands.model.picker.intro').replace(chr(10), chr(10) + '  ')}\n\n"),
+        ]
         for i, (alias, label, desc) in enumerate(options):
             is_cur = i == cursor[0]
             is_active = resolve_model(alias) == current
@@ -455,12 +463,12 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
 
         eff = effort_levels[effort_idx[0]]
         t.append(("", "\n"))
-        t.append(("ansigray", "  Effort: "))
+        t.append(("ansigray", f"  {_tr(ctx, 'commands.model.picker.effort')} "))
         for lvl in effort_levels:
             s = "bold ansibrightcyan" if lvl == eff else "ansigray"
             t.append((s, f" {effort_sym[lvl]} {lvl} "))
         t.append(("", "\n"))
-        t.append(("ansigray", "  ↑↓ select · ←→ effort · ↵ confirm · esc cancel"))
+        t.append(("ansigray", f"  {_tr(ctx, 'commands.model.picker.footer')}"))
         return t
 
     app: Application = Application(
@@ -473,7 +481,7 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
         pass
 
     if result[0] is None:
-        ctx.console.print(f"[dim]Kept model as {current}[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.model.kept', current=current)}[/dim]")
         return
 
     ctx.engine.set_model(result[0])
@@ -542,10 +550,10 @@ def _execute_skill(skill, args: str, ctx: CommandContext) -> bool:
 
     prompt = skill.get_prompt(args)
     if not prompt:
-        ctx.console.print(f"[dim]Skill /{skill.name} produced no prompt.[/dim]")
+        ctx.console.print(f"[dim]{_tr(ctx, 'commands.skills.no_prompt', name=skill.name)}[/dim]")
         return True
 
-    ctx.console.print(f"[dim]Running skill: /{skill.name}…[/dim]")
+    ctx.console.print(f"[dim]{_tr(ctx, 'commands.skills.running', name=skill.name)}[/dim]")
 
     if skill.context == "fork":
         # Forked execution: isolated turn

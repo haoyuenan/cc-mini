@@ -156,6 +156,122 @@ def _bottom_toolbar_hint(is_terminal: bool, locale: str) -> str:
     return t(locale, "repl.bottom.chat_hint")
 
 
+def _exit_hint(locale: str) -> str:
+    return t(locale, "repl.exit_hint")
+
+
+def _resume_success_message(title: str, message_count: int, locale: str) -> str:
+    return t(locale, "repl.resume.success", title=title, message_count=message_count)
+
+
+def _resume_not_found_message(value: str, locale: str) -> str:
+    return t(locale, "repl.resume.not_found", value=value)
+
+
+def _background_workers_notice(locale: str) -> str:
+    return t(locale, "repl.background_workers_running")
+
+
+def _worker_update_message(locale: str) -> str:
+    return t(locale, "repl.worker_update")
+
+
+def _shell_exit_message(code: int, locale: str) -> str:
+    return t(locale, "repl.shell.exit", code=code)
+
+
+def _shell_error_message(error: str, locale: str) -> str:
+    return t(locale, "repl.shell.error", error=error)
+
+
+def _auto_compacting_message(locale: str) -> str:
+    return t(locale, "repl.auto_compacting")
+
+
+def _context_compressed_message(token_count: int, locale: str) -> str:
+    return t(locale, "repl.context_compressed", token_count=f"{token_count:,}")
+
+
+def _auto_compact_failed_message(error: str, locale: str) -> str:
+    return t(locale, "repl.auto_compact_failed", error=error)
+
+
+def _dream_start_message(locale: str) -> str:
+    return t(locale, "repl.dream.start")
+
+
+def _dream_complete_message(locale: str) -> str:
+    return t(locale, "repl.dream.complete")
+
+
+def _auto_dream_triggered_message(locale: str) -> str:
+    return t(locale, "repl.auto_dream_triggered")
+
+
+def _yes_no_label(value: bool, locale: str) -> str:
+    return "是" if locale == "zh-CN" and value else "否" if locale == "zh-CN" else ("yes" if value else "no")
+
+
+def _sandbox_status_title(locale: str) -> str:
+    return t(locale, "repl.sandbox.status")
+
+
+def _sandbox_mode_line(mode: str, locale: str) -> str:
+    return t(locale, "repl.sandbox.mode", value=mode)
+
+
+def _sandbox_enabled_line(enabled: bool, locale: str) -> str:
+    return t(locale, "repl.sandbox.enabled", value=_yes_no_label(enabled, locale))
+
+
+def _sandbox_network_isolation_line(enabled: bool, locale: str) -> str:
+    return t(locale, "repl.sandbox.network_isolation", value=_yes_no_label(enabled, locale))
+
+
+def _sandbox_dependency_errors_title(locale: str) -> str:
+    return t(locale, "repl.sandbox.dependency_errors")
+
+
+def _sandbox_excluded_commands_title(locale: str) -> str:
+    return t(locale, "repl.sandbox.excluded_commands")
+
+
+def _sandbox_configure_title(locale: str) -> str:
+    return t(locale, "repl.sandbox.configure")
+
+
+def _sandbox_option_auto_allow(locale: str) -> str:
+    return t(locale, "repl.sandbox.option.auto_allow")
+
+
+def _sandbox_option_regular(locale: str) -> str:
+    return t(locale, "repl.sandbox.option.regular")
+
+
+def _sandbox_option_disabled(locale: str) -> str:
+    return t(locale, "repl.sandbox.option.disabled")
+
+
+def _sandbox_select_prompt(locale: str) -> str:
+    return t(locale, "repl.sandbox.select_prompt")
+
+
+def _sandbox_cannot_enable_title(locale: str) -> str:
+    return t(locale, "repl.sandbox.cannot_enable")
+
+
+def _sandbox_cancelled_message(locale: str) -> str:
+    return t(locale, "repl.sandbox.cancelled")
+
+
+def _tool_done_message(locale: str) -> str:
+    return t(locale, "repl.tool_done")
+
+
+def _session_note(session_id: str, locale: str) -> str:
+    return t(locale, "repl.session_note", session_id=session_id)
+
+
 # ---------------------------------------------------------------------------
 # Bordered input prompt — matches claude-code-main PromptInput.tsx
 # borderStyle="round", borderLeft=false, borderRight=false
@@ -457,7 +573,7 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
                 elif event[0] == "tool_result":
                     _, tool_name, tool_input, result = event
                     status = "[red]✗[/red]" if result.is_error else "[green]✓[/green]"
-                    console.print(f"[dim]  {status} done[/dim]")
+                    console.print(f"[dim]  {status} {_tool_done_message(locale)}[/dim]")
                     if result.is_error:
                         console.print(f"  [red]{result.content[:300]}[/red]")
                     streaming = False
@@ -489,7 +605,7 @@ def _run_dream(engine: Engine, memory_dir: Path,
                permissions: PermissionChecker,
                locale: str = DEFAULT_LOCALE) -> None:
     """Run dream consolidation: snapshot messages, submit dream prompt, restore."""
-    console.print("[dim]Starting dream consolidation…[/dim]")
+    console.print(f"[dim]{_dream_start_message(locale)}[/dim]")
     saved_messages = list(engine.messages)
     engine.messages = []
     dream_prompt = build_dream_prompt(memory_dir)
@@ -498,7 +614,7 @@ def _run_dream(engine: Engine, memory_dir: Path,
     # Rebuild system prompt to pick up updated MEMORY.md
     engine.system_prompt = build_system_prompt(memory_dir=memory_dir)
     record_consolidation(memory_dir)
-    console.print("[dim]Dream consolidation complete. Memory index updated.[/dim]")
+    console.print(f"[dim]{_dream_complete_message(locale)}[/dim]")
 
 
 def _load_startup_locale(cwd: str) -> str:
@@ -706,22 +822,20 @@ def main() -> None:
                     locale=session_locale[0],
                 )
                 engine.set_session_store(session_store)
-                console.print(f"[green]✓[/green] Resumed: {target.title[:50]}  "
-                              f"({len(msgs)} messages)")
+                console.print(
+                    f"[green]✓[/green] {_resume_success_message(target.title[:50], len(msgs), session_locale[0])}"
+                )
                 if warning:
                     console.print(f"[yellow]{warning}[/yellow]")
         else:
-            console.print(f"[red]Session not found: {args.resume}[/red]")
+            console.print(f"[red]{_resume_not_found_message(args.resume, session_locale[0])}[/red]")
 
     # Non-interactive / piped
     if args.print or args.prompt:
         prompt_text = args.prompt or sys.stdin.read()
         run_query(engine, _parse_input(prompt_text), print_mode=args.print, permissions=permissions)
         if worker_manager.has_running_tasks():
-            console.print(
-                "\n[dim]Background workers are still running. Use interactive mode "
-                "to receive coordinator task notifications.[/dim]"
-            )
+            console.print(f"\n[dim]{_background_workers_notice(session_locale[0])}[/dim]")
         if cost_tracker.total_cost_usd > 0:
             console.print(f"\n[dim]{cost_tracker.format_cost()}[/dim]")
         return
@@ -733,10 +847,10 @@ def main() -> None:
     )
     if is_coordinator_mode():
         config_note += " [dim yellow]· coordinator[/dim yellow]"
-    session_note = f"[dim]session {session_store.session_id[:8]}[/dim]" if session_store else ""
+    session_note = f"[dim]{_session_note(session_store.session_id[:8], session_locale[0])}[/dim]" if session_store else ""
     console.print("[bold cyan]cc-mini[/bold cyan]  "
                   f"{config_note}  {session_note}")
-    console.print('[dim]Esc or Ctrl+C to cancel, Ctrl+C twice to exit[/dim]')
+    console.print(f"[dim]{_exit_hint(session_locale[0])}[/dim]")
 
     _file_history = FileHistory(str(_HISTORY_FILE))
 
@@ -758,9 +872,9 @@ def main() -> None:
             if result.stdout:
                 console.print(result.stdout, end="", markup=False)
             if result.returncode != 0:
-                console.print(f"[red][exit {result.returncode}][/red]")
+                console.print(f"[red][{_shell_exit_message(result.returncode, session_locale[0])}][/red]")
         except Exception as exc:
-            console.print(f"[red]Error: {exc}[/red]")
+            console.print(f"[red]{_shell_error_message(str(exc), session_locale[0])}[/red]")
 
     # Companion animator — drives real-time idle animation in bottom_toolbar
     # Matches CompanionSprite.tsx tick-based animation system
@@ -810,7 +924,7 @@ def main() -> None:
             if not notifications:
                 return
             for notification in notifications:
-                console.print("\n[dim]Worker update received.[/dim]")
+                console.print(f"\n[dim]{_worker_update_message(session_locale[0])}[/dim]")
                 run_query(engine, notification, print_mode=False, permissions=permissions, locale=session_locale[0])
 
     while True:
@@ -884,7 +998,7 @@ def main() -> None:
             console.print(f"[dim]{t(session_locale[0], 'repl.goodbye')}[/dim]")
             break
         if user_input.startswith("/sandbox"):
-            _handle_sandbox_command(user_input, sandbox_mgr, console)
+            _handle_sandbox_command(user_input, sandbox_mgr, console, locale=session_locale[0])
             continue
 
         # Slash commands (session, compact, help, etc.)
@@ -942,14 +1056,14 @@ def main() -> None:
         # Auto-compact when approaching token limits
         if should_compact(engine.get_messages(), model=app_config.model,
                           last_input_tokens=cost_tracker.last_input_tokens):
-            console.print("[dim]Auto-compacting conversation…[/dim]")
+            console.print(f"[dim]{_auto_compacting_message(session_locale[0])}[/dim]")
             try:
                 new_msgs, _ = compact_service.compact(
                     engine.get_messages(), engine.get_system_prompt())
                 engine.set_messages(new_msgs)
-                console.print(f"[dim]Context compressed to {estimate_tokens(new_msgs):,} tokens.[/dim]")
+                console.print(f"[dim]{_context_compressed_message(estimate_tokens(new_msgs), session_locale[0])}[/dim]")
             except Exception as e:
-                console.print(f"[dim red]Auto-compact failed: {e}[/dim red]")
+                console.print(f"[dim red]{_auto_compact_failed_message(str(e), session_locale[0])}[/dim red]")
 
         # Check if user is talking directly to companion — skip Claude, let
         # companion reply directly via observer (no awkward "." response)
@@ -1048,8 +1162,8 @@ def main() -> None:
             sessions_dir=sessions_path,
         ):
             if try_acquire_lock(memory_dir):
-                console.print("\n[dim]Auto-dream triggered (enough time + sessions since last consolidation)…[/dim]")
-                _run_dream(engine, memory_dir, permissions)
+                console.print(f"\n[dim]{_auto_dream_triggered_message(session_locale[0])}[/dim]")
+                _run_dream(engine, memory_dir, permissions, locale=session_locale[0])
                 release_lock(memory_dir)
 
     # Print cost summary on exit
@@ -1058,7 +1172,7 @@ def main() -> None:
 
 
 def _handle_sandbox_command(
-    user_input: str, mgr: SandboxManager, con: Console
+    user_input: str, mgr: SandboxManager, con: Console, locale: str = DEFAULT_LOCALE
 ) -> None:
     """Handle /sandbox REPL command.
 
@@ -1074,7 +1188,7 @@ def _handle_sandbox_command(
     subcmd = parts[1] if len(parts) > 1 else ""
 
     if subcmd == "status" or subcmd == "":
-        _show_sandbox_status(mgr, con)
+        _show_sandbox_status(mgr, con, locale)
     elif subcmd == "exclude" and len(parts) > 2:
         pattern = parts[2].strip("\"'")
         msg = mgr.add_excluded_command(pattern)
@@ -1085,10 +1199,10 @@ def _handle_sandbox_command(
         mgr.save()
         con.print(f"[green]{msg}[/green]")
     else:
-        _interactive_sandbox_setup(mgr, con)
+        _interactive_sandbox_setup(mgr, con, locale)
 
 
-def _show_sandbox_status(mgr: SandboxManager, con: Console) -> None:
+def _show_sandbox_status(mgr: SandboxManager, con: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Display sandbox status. Corresponds to SandboxConfigTab + SandboxDependenciesTab."""
     dep = mgr.check_dependencies()
     mode = (
@@ -1096,39 +1210,37 @@ def _show_sandbox_status(mgr: SandboxManager, con: Console) -> None:
         if mgr.is_auto_allow()
         else ("regular" if mgr.config.enabled else "disabled")
     )
-    con.print("[bold]Sandbox Status[/bold]")
-    con.print(f"  Mode: [cyan]{mode}[/cyan]")
-    con.print(f"  Enabled: {'yes' if mgr.is_enabled() else 'no'}")
-    con.print(
-        f"  Network isolation: {'yes' if mgr.config.unshare_net else 'no'}"
-    )
+    con.print(f"[bold]{_sandbox_status_title(locale)}[/bold]")
+    con.print(f"  {_sandbox_mode_line(mode, locale).replace(mode, f'[cyan]{mode}[/cyan]')}")
+    con.print(f"  {_sandbox_enabled_line(mgr.is_enabled(), locale)}")
+    con.print(f"  {_sandbox_network_isolation_line(mgr.config.unshare_net, locale)}")
     if dep.errors:
-        con.print("[bold red]Dependency errors:[/bold red]")
+        con.print(f"[bold red]{_sandbox_dependency_errors_title(locale)}[/bold red]")
         for e in dep.errors:
             con.print(f"  [red]{e}[/red]")
     if dep.warnings:
         for w in dep.warnings:
             con.print(f"  [yellow]{w}[/yellow]")
     if mgr.config.excluded_commands:
-        con.print("[bold]Excluded commands:[/bold]")
+        con.print(f"[bold]{_sandbox_excluded_commands_title(locale)}[/bold]")
         for cmd in mgr.config.excluded_commands:
             con.print(f"  - {cmd}")
 
 
-def _interactive_sandbox_setup(mgr: SandboxManager, con: Console) -> None:
+def _interactive_sandbox_setup(mgr: SandboxManager, con: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Interactive three-way mode selection. Corresponds to SandboxModeTab Select."""
     dep = mgr.check_dependencies()
     if dep.errors:
-        con.print("[bold red]Cannot enable sandbox:[/bold red]")
+        con.print(f"[bold red]{_sandbox_cannot_enable_title(locale)}[/bold red]")
         for e in dep.errors:
             con.print(f"  [red]{e}[/red]")
         return
 
-    con.print("[bold]Configure sandbox mode:[/bold]")
-    con.print("  [1] auto-allow -- bash commands auto-approved in sandbox")
-    con.print("  [2] regular    -- bash commands still need confirmation")
-    con.print("  [3] disabled   -- no sandbox")
-    choice = input("  Select [1/2/3]: ").strip()
+    con.print(f"[bold]{_sandbox_configure_title(locale)}[/bold]")
+    con.print(f"  {_sandbox_option_auto_allow(locale)}")
+    con.print(f"  {_sandbox_option_regular(locale)}")
+    con.print(f"  {_sandbox_option_disabled(locale)}")
+    choice = input(f"  {_sandbox_select_prompt(locale)}").strip()
     mode_map = {"1": "auto-allow", "2": "regular", "3": "disabled"}
     mode = mode_map.get(choice)
     if mode:
@@ -1136,7 +1248,7 @@ def _interactive_sandbox_setup(mgr: SandboxManager, con: Console) -> None:
         mgr.save()
         con.print(f"[green]{msg}[/green]")
     else:
-        con.print("[dim]Cancelled[/dim]")
+        con.print(f"[dim]{_sandbox_cancelled_message(locale)}[/dim]")
 
 
 if __name__ == "__main__":

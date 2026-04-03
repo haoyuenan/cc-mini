@@ -167,6 +167,127 @@ def test_load_startup_locale_falls_back_to_default_when_missing():
         assert _load_startup_locale("D:/repo") == "en"
 
 
+def test_resume_success_message_is_localized_to_chinese():
+    from core.main import _resume_success_message
+
+    rendered = _resume_success_message("示例会话", 5, "zh-CN")
+
+    assert "已恢复" in rendered
+    assert "5 条消息" in rendered
+
+
+def test_resume_not_found_message_is_localized_to_chinese():
+    from core.main import _resume_not_found_message
+
+    rendered = _resume_not_found_message("abc123", "zh-CN")
+
+    assert "未找到会话" in rendered
+    assert "abc123" in rendered
+
+
+def test_background_workers_notice_is_localized_to_chinese():
+    from core.main import _background_workers_notice
+
+    rendered = _background_workers_notice("zh-CN")
+
+    assert "后台 worker 仍在运行" in rendered
+
+
+def test_worker_update_message_is_localized_to_chinese():
+    from core.main import _worker_update_message
+
+    assert "收到 worker 更新" in _worker_update_message("zh-CN")
+
+
+def test_exit_hint_is_localized_to_chinese():
+    from core.main import _exit_hint
+
+    rendered = _exit_hint("zh-CN")
+
+    assert "按 Esc 或 Ctrl+C 取消" in rendered
+
+
+def test_shell_exit_message_is_localized_to_chinese():
+    from core.main import _shell_exit_message
+
+    assert "退出码 7" in _shell_exit_message(7, "zh-CN")
+
+
+def test_shell_error_message_is_localized_to_chinese():
+    from core.main import _shell_error_message
+
+    assert "错误：boom" in _shell_error_message("boom", "zh-CN")
+
+
+def test_auto_compact_messages_are_localized_to_chinese():
+    from core.main import (
+        _auto_compacting_message,
+        _context_compressed_message,
+        _auto_compact_failed_message,
+    )
+
+    assert "正在自动压缩对话" in _auto_compacting_message("zh-CN")
+    assert "上下文已压缩到 123 个 token" in _context_compressed_message(123, "zh-CN")
+    assert "自动压缩失败：boom" in _auto_compact_failed_message("boom", "zh-CN")
+
+
+def test_dream_messages_are_localized_to_chinese():
+    from core.main import (
+        _dream_start_message,
+        _dream_complete_message,
+        _auto_dream_triggered_message,
+    )
+
+    assert "开始执行 dream 整理" in _dream_start_message("zh-CN")
+    assert "dream 整理完成" in _dream_complete_message("zh-CN")
+    assert "已触发自动 dream" in _auto_dream_triggered_message("zh-CN")
+
+
+def test_sandbox_status_messages_are_localized_to_chinese():
+    from core.main import (
+        _sandbox_status_title,
+        _sandbox_mode_line,
+        _sandbox_enabled_line,
+        _sandbox_network_isolation_line,
+        _sandbox_dependency_errors_title,
+        _sandbox_excluded_commands_title,
+    )
+
+    assert "沙箱状态" in _sandbox_status_title("zh-CN")
+    assert "模式：" in _sandbox_mode_line("regular", "zh-CN")
+    assert "已启用：是" in _sandbox_enabled_line(True, "zh-CN")
+    assert "网络隔离：否" in _sandbox_network_isolation_line(False, "zh-CN")
+    assert "依赖错误" in _sandbox_dependency_errors_title("zh-CN")
+    assert "排除命令" in _sandbox_excluded_commands_title("zh-CN")
+
+
+def test_sandbox_setup_messages_are_localized_to_chinese():
+    from core.main import (
+        _sandbox_configure_title,
+        _sandbox_option_auto_allow,
+        _sandbox_option_regular,
+        _sandbox_option_disabled,
+        _sandbox_select_prompt,
+        _sandbox_cannot_enable_title,
+        _sandbox_cancelled_message,
+    )
+
+    assert "配置沙箱模式" in _sandbox_configure_title("zh-CN")
+    assert "自动放行" in _sandbox_option_auto_allow("zh-CN")
+    assert "仍需确认" in _sandbox_option_regular("zh-CN")
+    assert "禁用" in _sandbox_option_disabled("zh-CN")
+    assert "请选择 [1/2/3]" in _sandbox_select_prompt("zh-CN")
+    assert "无法启用沙箱" in _sandbox_cannot_enable_title("zh-CN")
+    assert "已取消" in _sandbox_cancelled_message("zh-CN")
+
+
+def test_tool_done_and_session_note_are_localized_to_chinese():
+    from core.main import _tool_done_message, _session_note
+
+    assert "完成" in _tool_done_message("zh-CN")
+    assert "会话 abcd1234" in _session_note("abcd1234", "zh-CN")
+
+
 @patch("core.main.EscListener", _FakeEscListener)
 def test_run_query_uses_localized_spinner_labels():
     from core.main import run_query
