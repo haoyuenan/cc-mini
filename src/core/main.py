@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import threading
+from importlib.metadata import PackageNotFoundError, version as package_version
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.layout.menus import CompletionsMenu
 from rich.console import Console
 from rich.live import Live
+from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
@@ -75,6 +77,26 @@ _HISTORY_FILE = Path.home() / ".cc_mini_history"
 
 # Match claude-code-main: useDoublePress DOUBLE_PRESS_TIMEOUT_MS = 800
 _DOUBLE_PRESS_TIMEOUT_MS = 0.8
+_WELCOME_PANEL_WIDTH = 28
+_SHORTCUTS_PANEL_WIDTH = 39
+_INTRO_PANEL_GAP = 2
+_HEADER_EXTRA_WIDTH = 5
+_WELCOME_ART_LINES = (
+    "",
+    "  ▓▓▓▓  ▓▓▓▓  ▓       ▓",
+    "  ▓     ▓     ▓ ▓   ▓ ▓",
+    "  ▓     ▓     ▓  ▓ ▓  ▓",
+    "  ▓▓▓▓  ▓▓▓▓  ▓   ▓   ▓",
+    "",
+)
+_WELCOME_ART_WIDTH = max(len(line) for line in _WELCOME_ART_LINES)
+
+
+def _app_version() -> str:
+    try:
+        return package_version("cc-mini")
+    except PackageNotFoundError:
+        return "0.1.0"
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +173,7 @@ _slash_completer = _SlashCommandCompleter()
 
 
 def _bottom_toolbar_hint(is_terminal: bool, locale: str) -> str:
-    if is_terminal:
-        return t(locale, "repl.bottom.terminal_hint")
-    return t(locale, "repl.bottom.chat_hint")
+    return "-"
 
 
 def _exit_hint(locale: str) -> str:
@@ -270,6 +290,96 @@ def _tool_done_message(locale: str) -> str:
 
 def _session_note(session_id: str, locale: str) -> str:
     return t(locale, "repl.session_note", session_id=session_id)
+
+
+def _build_repl_header(
+    provider: str,
+    model: str,
+    max_tokens: int,
+    session_id: str | None,
+    coordinator_enabled: bool,
+    locale: str = DEFAULT_LOCALE,
+):
+    title = Text.assemble(
+        ("CC-Mini", "bold cyan"),
+        (f" [v{_app_version()}]", "bold white"),
+    )
+    body = Text()
+    body.append("🤖 Model: ", style="bold cyan")
+    body.append(model, style="bold")
+    body.append("   💾 Max: ", style="bold magenta")
+    body.append(str(max_tokens), style="bold")
+    if session_id:
+        body.append("   🆔 Session: ", style="bold green")
+        body.append(session_id[:8], style="bold")
+    if coordinator_enabled:
+        body.append("   ⚙ ", style="bold yellow")
+        body.append("coordinator", style="bold yellow")
+    return Panel(
+        body,
+        title=title,
+        border_style="cyan",
+        padding=(0, 1),
+        expand=False,
+        width=_WELCOME_PANEL_WIDTH + _SHORTCUTS_PANEL_WIDTH + _HEADER_EXTRA_WIDTH,
+    )
+
+
+def _build_repl_intro_section(
+    model: str | None = None,
+    max_tokens: int | None = None,
+    session_id: str | None = None,
+    locale: str = DEFAULT_LOCALE,
+):
+    left_width = _WELCOME_PANEL_WIDTH - 4
+    right_width = _SHORTCUTS_PANEL_WIDTH - 5
+    left_lines = [
+        *list(_WELCOME_ART_LINES[1:-1]),
+        "",
+        f"Model: {model}" if model else "",
+        f"Max: {max_tokens}" if max_tokens is not None else "",
+        f"Session: {session_id[:8]}" if session_id else "",
+    ]
+    right_lines = [
+        "Quick Shortcuts",
+        "",
+        "Esc         : Cancel / Quit",
+        "Ctrl + C    : Force Exit",
+        "Alt + Enter : New Line",
+        "/resume     : Load History",
+    ]
+    line_count = max(len(left_lines), len(right_lines))
+    left_lines.extend([""] * (line_count - len(left_lines)))
+    right_lines.extend([""] * (line_count - len(right_lines)))
+
+    body = Text()
+    for index, (left, right) in enumerate(zip(left_lines, right_lines)):
+        body.append(left.ljust(left_width), style="bold cyan")
+        body.append(" │ ", style="dim")
+        body.append(right.ljust(right_width), style="bold yellow" if index == 0 else "bold white")
+        if index < line_count - 1:
+            body.append("\n")
+
+    return Panel(
+        body,
+        title=Text(f"Welcome to CC-Mini v{_app_version()}", style="bold white"),
+        border_style="cyan",
+        padding=(0, 1),
+        expand=False,
+        width=_WELCOME_PANEL_WIDTH + _SHORTCUTS_PANEL_WIDTH,
+    )
+
+
+def _build_tool_call_panel(tool_name: str, preview: str, locale: str = DEFAULT_LOCALE):
+    body = Text()
+    body.append(preview or "…", style="dim")
+    return Panel(
+        body,
+        title=Text(f"↳ {tool_name}", style="bold cyan"),
+        border_style="bright_black",
+        padding=(0, 1),
+        expand=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +678,8 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
                     listener.pause()
                     _, tool_name, tool_input = event
                     preview = _tool_preview(tool_name, tool_input)
-                    console.print(f"\n[dim]↳ {tool_name}({preview}) …[/dim]")
+                    console.print()
+                    console.print(_build_tool_call_panel(tool_name, preview, locale))
 
                 elif event[0] == "tool_result":
                     _, tool_name, tool_input, result = event
@@ -841,16 +952,14 @@ def main() -> None:
         return
 
     # Interactive REPL
-    config_note = (
-        f"[dim]{app_config.provider}:{app_config.model} · "
-        f"max_tokens={app_config.max_tokens}[/dim]"
+    console.print(
+        _build_repl_intro_section(
+            model=app_config.model,
+            max_tokens=app_config.max_tokens,
+            session_id=session_store.session_id if session_store else None,
+            locale=session_locale[0],
+        )
     )
-    if is_coordinator_mode():
-        config_note += " [dim yellow]· coordinator[/dim yellow]"
-    session_note = f"[dim]{_session_note(session_store.session_id[:8], session_locale[0])}[/dim]" if session_store else ""
-    console.print("[bold cyan]cc-mini[/bold cyan]  "
-                  f"{config_note}  {session_note}")
-    console.print(f"[dim]{_exit_hint(session_locale[0])}[/dim]")
 
     _file_history = FileHistory(str(_HISTORY_FILE))
 

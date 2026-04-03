@@ -1,0 +1,14 @@
+╭────Welcome to CC-Mini v1.0.0────────Quick Shortcuts───────────╮
+│                               │  Esc         : Cancel / Quit  │
+│     ▓▓▓▓  ▓▓▓▓  ▓       ▓     │  Ctrl + C    : Force Exit     │
+│     ▓     ▓     ▓ ▓   ▓ ▓     │  Alt + Enter : New Line       │
+│     ▓     ▓     ▓  ▓ ▓  ▓     │  /resume     : Load History   │
+│     ▓▓▓▓  ▓▓▓▓  ▓   ▓   ▓     │  /exit       : Exit           │
+│                               │  /buddy      : Load Buddy     │
+│  Model: glm-5 Max: 32000      │                               │
+│  Max: 32000                   │                               │
+│  Session: 009C54f1            │                               │
+╰───────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────
+> Input your question here...
+╰────────────────────────────────────────────────────────────────

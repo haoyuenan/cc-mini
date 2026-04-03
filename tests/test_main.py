@@ -4,6 +4,7 @@ from core.tools.base import Tool, ToolResult
 from core.permissions import PermissionChecker
 from core.session import SessionMeta
 from prompt_toolkit.document import Document
+from rich.console import Console
 
 
 class DummyTool(Tool):
@@ -137,8 +138,8 @@ def test_localized_builtin_commands_show_chinese_descriptions():
 def test_bottom_toolbar_hint_is_localized_to_chinese():
     from core.main import _bottom_toolbar_hint
 
-    assert "回车发送" in _bottom_toolbar_hint(False, "zh-CN")
-    assert "终端模式" in _bottom_toolbar_hint(True, "zh-CN")
+    assert _bottom_toolbar_hint(False, "zh-CN") == "-"
+    assert _bottom_toolbar_hint(True, "zh-CN") == "-"
 
 
 def test_load_startup_locale_restores_latest_session_locale():
@@ -295,6 +296,108 @@ def test_tool_done_and_session_note_are_localized_to_chinese():
 
     assert "完成" in _tool_done_message("zh-CN")
     assert "会话 abcd1234" in _session_note("abcd1234", "zh-CN")
+
+
+def test_repl_intro_panel_contains_version_and_runtime_status_details():
+    from core.main import _build_repl_intro_section
+
+    recorder = Console(record=True, width=100)
+    recorder.print(
+        _build_repl_intro_section(
+            model="claude-sonnet-4-20250514",
+            max_tokens=32000,
+            session_id="abcd1234",
+        )
+    )
+
+    rendered = recorder.export_text()
+
+    assert "Welcome to CC-Mini v0.1.0" in rendered
+    assert "Model:" in rendered
+    assert "claude-sonnet-4-20250514" in rendered
+    assert "Max: 32000" in rendered
+    assert "Session: abcd1234" in rendered
+
+
+def test_tool_call_panel_surfaces_tool_name_and_preview():
+    from core.main import _build_tool_call_panel
+
+    recorder = Console(record=True, width=100)
+    recorder.print(_build_tool_call_panel("Bash", "git diff --stat", "zh-CN"))
+
+    rendered = recorder.export_text()
+
+    assert "Bash" in rendered
+    assert "git diff --stat" in rendered
+
+
+def test_repl_intro_panel_contains_welcome_art_and_shortcuts_in_one_frame():
+    from core.main import _build_repl_intro_section
+
+    panel = _build_repl_intro_section()
+    recorder = Console(record=True, width=100)
+    recorder.print(panel)
+
+    rendered = recorder.export_text()
+
+    assert "Welcome to CC-Mini" in rendered
+    assert "Quick Shortcuts" in rendered
+    assert "▓▓▓▓" in rendered
+    assert "▓   ▓" in rendered
+    assert "Cancel / Quit" in rendered
+    assert panel.expand is False
+
+
+def test_repl_intro_panel_uses_single_outer_panel_width():
+    from rich.panel import Panel
+    from core.main import (
+        _SHORTCUTS_PANEL_WIDTH,
+        _WELCOME_PANEL_WIDTH,
+        _build_repl_intro_section,
+    )
+
+    panel = _build_repl_intro_section()
+
+    assert isinstance(panel, Panel)
+    assert panel.width == _WELCOME_PANEL_WIDTH + _SHORTCUTS_PANEL_WIDTH
+
+
+def test_repl_intro_section_uses_tighter_gap_and_fixed_width():
+    from core.main import _build_repl_intro_section
+
+    intro = _build_repl_intro_section()
+
+    assert intro.expand is False
+    assert intro.width is not None
+
+
+def test_repl_header_width_matches_intro_total_width():
+    from core.main import (
+        _HEADER_EXTRA_WIDTH,
+        _SHORTCUTS_PANEL_WIDTH,
+        _WELCOME_PANEL_WIDTH,
+        _build_repl_header,
+    )
+
+    header = _build_repl_header(
+        provider="anthropic",
+        model="claude-sonnet-4-20250514",
+        max_tokens=32000,
+        session_id="abcd1234",
+        coordinator_enabled=True,
+        locale="zh-CN",
+    )
+
+    assert header.expand is False
+    assert _HEADER_EXTRA_WIDTH == 5
+    assert header.width == _WELCOME_PANEL_WIDTH + _SHORTCUTS_PANEL_WIDTH + _HEADER_EXTRA_WIDTH
+
+
+def test_welcome_panel_is_narrower_to_pull_shortcuts_left():
+    from core.main import _SHORTCUTS_PANEL_WIDTH, _WELCOME_PANEL_WIDTH
+
+    assert _WELCOME_PANEL_WIDTH < _SHORTCUTS_PANEL_WIDTH
+    assert _WELCOME_PANEL_WIDTH <= 28
 
 
 @patch("core.main.EscListener", _FakeEscListener)
