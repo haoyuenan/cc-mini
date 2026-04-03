@@ -334,6 +334,7 @@ def _build_repl_intro_section(
     left_width = _WELCOME_PANEL_WIDTH - 4
     right_width = _SHORTCUTS_PANEL_WIDTH - 5
     left_lines = [
+        "",
         *list(_WELCOME_ART_LINES[1:-1]),
         "",
         f"Model: {model}" if model else "",
@@ -347,6 +348,8 @@ def _build_repl_intro_section(
         "Ctrl + C    : Force Exit",
         "Alt + Enter : New Line",
         "/resume     : Load History",
+        "/buddy      : Load Buddy",
+        "/exit       : Exit",
     ]
     line_count = max(len(left_lines), len(right_lines))
     left_lines.extend([""] * (line_count - len(left_lines)))
