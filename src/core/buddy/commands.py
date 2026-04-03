@@ -21,6 +21,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.text import Text
 from ..llm import LLMClient
+from ..i18n import DEFAULT_LOCALE, t
 
 from .companion import companion_user_id, get_companion, get_all_companions, roll, roll_with_seed
 from .render import render_companion_card, render_hatch_animation, render_compact_status, render_companion_list
@@ -211,57 +212,16 @@ def _render_mood(companion, console: Console) -> None:
     console.print(f'\n[dim]Dominant mood: {mood.dominant().lower()}[/dim]')
 
 
-def _render_help(console: Console) -> None:
+def _render_help(console: Console, locale: str = DEFAULT_LOCALE) -> None:
     """Show all buddy commands and gameplay guide."""
     from rich.panel import Panel
     from rich.text import Text
 
-    help_text = (
-        "[bold]Commands[/bold]\n"
-        "\n"
-        "  [cyan]/buddy[/cyan]              Hatch your first companion, or show its card\n"
-        "  [cyan]/buddy help[/cyan]          Show this help\n"
-        "  [cyan]/buddy pet[/cyan]           Pet your companion (heart animation, boosts happy)\n"
-        "  [cyan]/buddy stats[/cyan]         Show companion card with stats and mood\n"
-        "  [cyan]/buddy mood[/cyan]          Show current mood details\n"
-        "  [cyan]/buddy new[/cyan]           Hatch an additional random companion\n"
-        "  [cyan]/buddy list[/cyan]          View all companions in your collection\n"
-        "  [cyan]/buddy select N[/cyan]      Switch active companion to #N\n"
-        "  [cyan]/buddy mute[/cyan]          Mute companion speech bubbles\n"
-        "  [cyan]/buddy unmute[/cyan]        Unmute companion speech bubbles\n"
-        "  [cyan]/buddy ia[/cyan]            Start the Poke Game adventure\n"
-        "\n"
-        "[bold]Gameplay Guide[/bold]\n"
-        "\n"
-        "  [yellow]Hatching[/yellow]  Your first companion is determined by your username.\n"
-        "            Use [cyan]/buddy new[/cyan] to hatch more with random seeds.\n"
-        "            18 species, 5 rarities (Common to Legendary), 1% shiny chance.\n"
-        "\n"
-        "  [yellow]Stats[/yellow]    Each companion has 5 permanent stats (0-100):\n"
-        "            DEBUGGING, PATIENCE, CHAOS, WISDOM, SNARK.\n"
-        "            These shape how your companion talks and reacts.\n"
-        "\n"
-        "  [yellow]Mood[/yellow]     6 dynamic mood dimensions that change over time:\n"
-        "            Happy, Bored, Excited, Tired, Grumpy, Curious.\n"
-        "            Mood is affected by your coding activity:\n"
-        "            - Task success / bug fixes  ->  happy, excited\n"
-        "            - Errors / failures         ->  grumpy, tired\n"
-        "            - Reading / exploring code  ->  curious\n"
-        "            - Petting ([cyan]/buddy pet[/cyan])     ->  happy, excited\n"
-        "            - Long idle time            ->  bored\n"
-        "            Mood gradually decays back to neutral over time.\n"
-        "\n"
-        "  [yellow]Talking[/yellow]  Your companion reacts after each Claude response.\n"
-        "            Address it by name to chat directly (20-turn memory).\n"
-        "            Its tone adapts to both stats and current mood.\n"
-        "\n"
-        "  [yellow]Pikachu[/yellow]  Set CC_MINI_BUDDY_SEED=pikachu-3361 before hatching\n"
-        "            to unlock the secret Legendary Pikachu species."
-    )
+    help_text = t(locale, "buddy.help.text")
 
     panel = Panel(
         help_text,
-        title="[bold]Buddy — AI Companion Pet[/bold]",
+        title=t(locale, "buddy.help.title"),
         border_style="cyan",
         padding=(1, 2),
     )
@@ -273,6 +233,7 @@ def handle_buddy_command(
     client: LLMClient,
     console: Console,
     model: str,
+    locale: str = DEFAULT_LOCALE,
 ) -> None:
     """Handle /buddy commands."""
     subcmd = args.strip().lower()
@@ -286,34 +247,34 @@ def handle_buddy_command(
             _hatch(client, console, model)
 
     elif subcmd == 'help':
-        _render_help(console)
+        _render_help(console, locale=locale)
 
     elif subcmd == 'pet':
         companion = get_companion()
         if not companion:
-            console.print('[dim]No companion yet. Type /buddy to hatch one![/dim]')
+            console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
             _pet_animation(console)
 
     elif subcmd == 'stats':
         companion = get_companion()
         if not companion:
-            console.print('[dim]No companion yet. Type /buddy to hatch one![/dim]')
+            console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
             render_companion_card(companion, console)
 
     elif subcmd == 'mute':
         save_companion_muted(True)
-        console.print('[dim]Companion reactions muted.[/dim]')
+        console.print(f"[dim]{t(locale, 'buddy.muted')}[/dim]")
 
     elif subcmd == 'unmute':
         save_companion_muted(False)
-        console.print('[dim]Companion reactions unmuted.[/dim]')
+        console.print(f"[dim]{t(locale, 'buddy.unmuted')}[/dim]")
 
     elif subcmd == 'mood':
         companion = get_companion()
         if not companion:
-            console.print('[dim]No companion yet. Type /buddy to hatch one![/dim]')
+            console.print(f"[dim]{t(locale, 'buddy.no_companion')}[/dim]")
         else:
             _render_mood(companion, console)
 

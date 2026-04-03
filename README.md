@@ -144,6 +144,7 @@ Coordinator mode adds: `Agent` (spawn worker), `SendMessage` (continue worker), 
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all available commands |
+| `/language` | Switch interface language, e.g. `/language zh` |
 | `/compact` | Compress conversation context |
 | `/resume` | Resume a past session |
 | `/history` | List saved sessions |
@@ -157,6 +158,14 @@ Coordinator mode adds: `Agent` (spawn worker), `SendMessage` (continue worker), 
 | `/simplify` | Review and fix code (skill) |
 
 Type `/` to see autocomplete suggestions.
+
+Example:
+
+```text
+/language zh
+```
+
+`/language` changes the terminal interface language only. It does not force the model to answer in a specific language.
 
 ---
 

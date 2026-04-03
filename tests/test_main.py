@@ -2,6 +2,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 from core.engine import Engine, AbortedError
 from core.tools.base import Tool, ToolResult
 from core.permissions import PermissionChecker
+from core.session import SessionMeta
+from prompt_toolkit.document import Document
 
 
 class DummyTool(Tool):
@@ -117,3 +119,80 @@ def test_run_query_handles_keyboard_interrupt():
     with patch.object(engine._client, "stream_messages", side_effect=raise_interrupt):
         run_query(engine, "hi", print_mode=True)
     # Should not propagate the exception
+
+
+def test_localized_builtin_commands_show_chinese_descriptions():
+    from core.main import _SlashCommandCompleter
+
+    completer = _SlashCommandCompleter(locale_getter=lambda: "zh-CN")
+    document = Document("/he")
+
+    completions = list(completer.get_completions(document, None))
+
+    assert completions
+    assert completions[0].display_text == "/help"
+    assert "显示可用命令" in str(completions[0].display_meta)
+
+
+def test_bottom_toolbar_hint_is_localized_to_chinese():
+    from core.main import _bottom_toolbar_hint
+
+    assert "回车发送" in _bottom_toolbar_hint(False, "zh-CN")
+    assert "终端模式" in _bottom_toolbar_hint(True, "zh-CN")
+
+
+def test_load_startup_locale_restores_latest_session_locale():
+    from core.main import _load_startup_locale
+
+    sessions = [
+        SessionMeta(
+            session_id="session-1",
+            title="latest",
+            cwd="D:/repo",
+            model="test-model",
+            created_at="2026-04-03T00:00:00+00:00",
+            updated_at="2026-04-03T00:00:01+00:00",
+            locale="zh-CN",
+        ),
+    ]
+
+    with patch("core.main.SessionStore.list_sessions", return_value=sessions):
+        assert _load_startup_locale("D:/repo") == "zh-CN"
+
+
+def test_load_startup_locale_falls_back_to_default_when_missing():
+    from core.main import _load_startup_locale
+
+    with patch("core.main.SessionStore.list_sessions", return_value=[]):
+        assert _load_startup_locale("D:/repo") == "en"
+
+
+@patch("core.main.EscListener", _FakeEscListener)
+def test_run_query_uses_localized_spinner_labels():
+    from core.main import run_query
+
+    spinner_starts: list[str] = []
+
+    class _FakeSpinnerManager:
+        def __init__(self, _console, locale=None):
+            pass
+
+        def start(self, text: str = ""):
+            spinner_starts.append(text)
+
+        def update(self, text: str):
+            pass
+
+        def stop(self):
+            pass
+
+    engine = MagicMock()
+    engine.submit.return_value = iter([("waiting",)])
+    engine.abort = MagicMock()
+    engine.cancel_turn = MagicMock()
+
+    with patch("core.main._SpinnerManager", _FakeSpinnerManager):
+        run_query(engine, "hi", print_mode=True, locale="zh-CN")
+
+    assert spinner_starts[0] == "思考中…"
+    assert "准备调用工具" in spinner_starts[1]

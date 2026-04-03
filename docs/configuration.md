@@ -88,3 +88,26 @@ model = "qwen/qwen3.6-plus-preview:free"
 ```
 
 When `provider = "openai"`, `OPENAI_API_KEY` / `OPENAI_BASE_URL` are used. When `provider = "anthropic"`, `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` are used.
+
+## Interface language
+
+Use the `/language` slash command inside the REPL to switch the terminal interface language:
+
+```text
+/language zh
+/language en
+```
+
+What it does:
+
+- Changes the REPL interface language for fixed UI text such as help output, hints, spinner labels, and buddy fixed strings.
+- Saves the selected locale in session metadata.
+- Restores the saved locale when you resume a session.
+- Resets to the default locale when you run `/clear` and start a new session.
+
+What it does not do:
+
+- It does **not** force model reply language.
+- Model output still depends on your prompt and the model's normal behavior.
+
+In interactive mode, `cc-mini` also restores the most recent saved locale for the current working directory on startup.

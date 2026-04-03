@@ -36,6 +36,7 @@ class SessionMeta:
     updated_at: str
     message_count: int = 0
     mode: str | None = None
+    locale: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +113,13 @@ class SessionStore:
 
     def __init__(self, cwd: str, model: str,
                  session_id: str | None = None,
-                 mode: str | None = None):
+                 mode: str | None = None,
+                 locale: str | None = None):
         self.session_id = session_id or uuid.uuid4().hex
         self.cwd = cwd
         self.model = model
         self.mode = mode
+        self.locale = locale
         self._dir = _SESSIONS_ROOT / _sanitize_cwd(cwd)
         self._dir.mkdir(parents=True, exist_ok=True)
         self._jsonl_path = self._dir / f"{self.session_id}.jsonl"
@@ -140,6 +143,10 @@ class SessionStore:
 
         self._save_meta()
 
+    def persist_metadata(self) -> None:
+        """Persist session metadata without appending a message."""
+        self._save_meta()
+
     def _save_meta(self) -> None:
         now = _now_iso()
         meta = SessionMeta(
@@ -151,6 +158,7 @@ class SessionStore:
             updated_at=now,
             message_count=self._message_count,
             mode=self.mode,
+            locale=self.locale,
         )
         if not hasattr(self, "_created_at"):
             self._created_at = now
@@ -190,7 +198,7 @@ class SessionStore:
         for meta_file in d.glob("*.meta.json"):
             try:
                 with open(meta_file, encoding="utf-8") as fh:
-                    data = json.load(fh)
+                    data = _load_meta_dict(json.load(fh))
                 results.append(SessionMeta(**data))
             except Exception:
                 continue
@@ -205,9 +213,16 @@ class SessionStore:
         meta = None
         if meta_path.exists():
             with open(meta_path, encoding="utf-8") as fh:
-                meta = SessionMeta(**json.load(fh))
+                meta = SessionMeta(**_load_meta_dict(json.load(fh)))
         messages = cls.load_messages(session_id, cwd)
         return meta, messages
+
+
+def _load_meta_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a backward-compatible SessionMeta payload."""
+    loaded = dict(data)
+    loaded.setdefault("locale", None)
+    return loaded
 
 
 # ---------------------------------------------------------------------------

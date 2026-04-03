@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .coordinator import current_session_mode, match_session_mode
+from .i18n import DEFAULT_LOCALE, available_locales, command_description, locale_label, normalize_locale, t
 
 if TYPE_CHECKING:
     from .compact import CompactService
@@ -35,12 +36,15 @@ class CommandContext:
     compact_service: CompactService
     console: Console
     app_config: AppConfig
+    locale: str = DEFAULT_LOCALE
     memory_dir: Path | None = None
     permissions: PermissionChecker | None = None
     run_dream: object = None
     cost_tracker: CostTracker | None = None
     new_session_store: object = None
     reconfigure_mode: object = None
+    translate: object = None
+    set_locale: object = None
 
 
 # ---------------------------------------------------------------------------
@@ -62,12 +66,17 @@ def parse_command(text: str) -> tuple[str, str] | None:
 # Handlers
 # ---------------------------------------------------------------------------
 
+def _tr(ctx: CommandContext, key: str, **kwargs) -> str:
+    if callable(ctx.translate):
+        return ctx.translate(key, **kwargs)  # type: ignore[misc]
+    return t(ctx.locale, key, **kwargs)
+
 def _cmd_help(ctx: CommandContext, args: str) -> None:
-    table = Table(title="Available Commands", show_header=True, header_style="bold cyan")
-    table.add_column("Command", style="green")
-    table.add_column("Description")
+    table = Table(title=_tr(ctx, "commands.help.title"), show_header=True, header_style="bold cyan")
+    table.add_column(_tr(ctx, "commands.help.column_command"), style="green")
+    table.add_column(_tr(ctx, "commands.help.column_description"))
     for name, desc, _ in _COMMAND_TABLE:
-        table.add_row(f"/{name}", desc)
+        table.add_row(f"/{name}", command_description(name, ctx.locale, desc))
     ctx.console.print(table)
 
 
@@ -191,6 +200,11 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
         ctx.console.print("[red]Session has no messages.[/red]")
         return
 
+    restored_locale = meta.locale if meta is not None and meta.locale else DEFAULT_LOCALE
+    if callable(ctx.set_locale):
+        ctx.set_locale(restored_locale)  # type: ignore[misc]
+    ctx.locale = restored_locale
+
     warning = None
     session_mode = meta.mode if meta is not None else None
     if callable(ctx.reconfigure_mode):
@@ -205,6 +219,7 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
         model=ctx.app_config.model,
         session_id=target_meta.session_id,
         mode=current_session_mode(),
+        locale=restored_locale,
     ) if ctx.session_store else None
 
     ctx.engine.set_messages(messages)
@@ -222,11 +237,61 @@ def _cmd_resume(ctx: CommandContext, args: str) -> None:
 
 def _cmd_clear(ctx: CommandContext, args: str) -> None:
     ctx.engine.set_messages([])
+    if callable(ctx.set_locale):
+        ctx.set_locale(DEFAULT_LOCALE)  # type: ignore[misc]
+    ctx.locale = DEFAULT_LOCALE
     if callable(ctx.new_session_store):
         new_store = ctx.new_session_store()
         ctx.engine.set_session_store(new_store)
         ctx.session_store = new_store  # type: ignore[assignment]
+        if hasattr(new_store, "persist_metadata"):
+            new_store.persist_metadata()
     ctx.console.print("[green]✓[/green] Conversation cleared. New session started.")
+
+
+def _cmd_language(ctx: CommandContext, args: str) -> None:
+    current_locale = ctx.locale or DEFAULT_LOCALE
+    supported = ", ".join(available_locales())
+
+    if not args.strip():
+        ctx.console.print(
+            _tr(
+                ctx,
+                "commands.language.current",
+                locale_code=current_locale,
+                supported=supported,
+            )
+        )
+        return
+
+    requested = normalize_locale(args.strip())
+    if requested is None:
+        ctx.console.print(
+            _tr(
+                ctx,
+                "commands.language.unsupported",
+                input=args.strip(),
+                supported=supported,
+            )
+        )
+        return
+
+    if callable(ctx.set_locale):
+        ctx.set_locale(requested)  # type: ignore[misc]
+    ctx.locale = requested
+    if ctx.session_store is not None:
+        ctx.session_store.locale = requested
+        if hasattr(ctx.session_store, "persist_metadata"):
+            ctx.session_store.persist_metadata()
+
+    ctx.console.print(
+        _tr(
+            ctx,
+            "commands.language.updated",
+            locale_code=requested,
+            name=locale_label(requested, display_locale=requested),
+        )
+    )
 
 
 def _cmd_memory(ctx: CommandContext, args: str) -> None:
@@ -427,6 +492,7 @@ def _cmd_model(ctx: CommandContext, args: str) -> None:
 # (name, description, handler)
 _COMMAND_TABLE: list[tuple[str, str, object]] = [
     ("help",     "Show available commands",                         _cmd_help),
+    ("language", "Switch interface language [locale]",              _cmd_language),
     ("compact",  "Compress conversation context [instructions]",    _cmd_compact),
     ("resume",   "Resume a past session [number|session-id]",       _cmd_resume),
     ("history",  "List saved sessions for this directory",          _cmd_history),
@@ -459,7 +525,7 @@ def handle_command(name: str, args: str, ctx: CommandContext) -> bool:
     if skill is not None:
         return _execute_skill(skill, args, ctx)
 
-    ctx.console.print(f"[red]Unknown command: /{name}[/red]  (try /help or /skills)")
+    ctx.console.print(f"[red]{_tr(ctx, 'commands.unknown', name=name)}[/red]")
     return False
 
 

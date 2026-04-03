@@ -66,6 +66,7 @@ from .memory import (
     release_lock,
     record_consolidation,
 )
+from .i18n import DEFAULT_LOCALE, command_description, normalize_locale, t
 from .skills import discover_skills, list_skills, build_skills_prompt_section
 from .skills_bundled import register_bundled_skills
 
@@ -84,9 +85,13 @@ _DOUBLE_PRESS_TIMEOUT_MS = 0.8
 class _SlashCommandCompleter(Completer):
     """Autocomplete for slash commands. Triggers when input starts with "/"."""
 
+    def __init__(self, locale_getter=None):
+        self._locale_getter = locale_getter or (lambda: DEFAULT_LOCALE)
+
     # (name, description) — built-in + buddy
     BUILTIN_COMMANDS: list[tuple[str, str]] = [
         ('help',    'Show available commands'),
+        ('language','Switch interface language [locale]'),
         ('compact', 'Compress conversation context'),
         ('resume',  'Resume a past session'),
         ('history', 'List saved sessions'),
@@ -112,6 +117,7 @@ class _SlashCommandCompleter(Completer):
             return
 
         query = text[1:].lower()
+        locale = self._locale_getter()
 
         # Built-in commands
         for name, desc in self.BUILTIN_COMMANDS:
@@ -120,7 +126,7 @@ class _SlashCommandCompleter(Completer):
                     f'/{name}',
                     start_position=-len(text),
                     display=f'/{name}',
-                    display_meta=desc,
+                    display_meta=command_description(name, locale, desc),
                 )
 
         # Dynamic skill commands
@@ -144,6 +150,12 @@ class _SlashCommandCompleter(Completer):
 _slash_completer = _SlashCommandCompleter()
 
 
+def _bottom_toolbar_hint(is_terminal: bool, locale: str) -> str:
+    if is_terminal:
+        return t(locale, "repl.bottom.terminal_hint")
+    return t(locale, "repl.bottom.chat_hint")
+
+
 # ---------------------------------------------------------------------------
 # Bordered input prompt — matches claude-code-main PromptInput.tsx
 # borderStyle="round", borderLeft=false, borderRight=false
@@ -158,6 +170,7 @@ def _bordered_prompt(
     animator_toolbar=None,
     refresh_interval: float | None = None,
     terminal_mode_ref: list | None = None,
+    locale: str = DEFAULT_LOCALE,
 ) -> str:
     """Prompt with bordered input box that adapts to content height.
 
@@ -219,14 +232,10 @@ def _bordered_prompt(
             w = os.get_terminal_size().columns
         except OSError:
             w = 80
-        if _is_terminal():
-            hints = "\u2500 TERMINAL MODE \u00b7 ! to exit \u00b7 Enter run "
-            fill = "\u2500" * max(0, w - 1 - len(hints))
-            parts: list[tuple[str, str]] = [('fg:ansiyellow', f'\u2570{hints}{fill}')]
-        else:
-            hints = "\u2500 Enter send \u00b7 Alt+Enter newline \u00b7 ! shell \u00b7 / commands "
-            fill = "\u2500" * max(0, w - 1 - len(hints))
-            parts: list[tuple[str, str]] = [('fg:ansicyan', f'\u2570{hints}{fill}')]
+        hints = _bottom_toolbar_hint(_is_terminal(), locale)
+        fill = "\u2500" * max(0, w - 1 - len(hints))
+        style = 'fg:ansiyellow' if _is_terminal() else 'fg:ansicyan'
+        parts: list[tuple[str, str]] = [(style, f'\u2570{hints}{fill}')]
 
         if animator_toolbar:
             extra = animator_toolbar()
@@ -366,12 +375,15 @@ class _SpinnerManager:
     with contextual text while the model is thinking or tools are executing.
     """
 
-    def __init__(self, console: Console):
+    def __init__(self, console: Console, locale: str = DEFAULT_LOCALE):
         self._console = console
         self._live: Live | None = None
-        self._spinner_text = "Thinking…"
+        self._locale = locale
+        self._spinner_text = t(locale, "repl.spinner.thinking")
 
-    def start(self, text: str = "Thinking…"):
+    def start(self, text: str | None = None):
+        if text is None:
+            text = t(self._locale, "repl.spinner.thinking")
         self._spinner_text = text
         self._live = Live(
             Spinner("dots", text=Text(self._spinner_text, style="dim")),
@@ -396,25 +408,26 @@ class _SpinnerManager:
 
 
 def run_query(engine: Engine, user_input: str | list, print_mode: bool,
-              permissions: PermissionChecker | None = None) -> None:
+              permissions: PermissionChecker | None = None,
+              locale: str = DEFAULT_LOCALE) -> None:
     """Run a single turn. Ctrl+C or Esc cancels the active turn."""
     listener = EscListener(on_cancel=engine.abort)
     if permissions:
         permissions.set_esc_listener(listener)
 
-    spinner = _SpinnerManager(console)
+    spinner = _SpinnerManager(console, locale=locale)
     first_text = True
     streaming = False
 
     try:
         with listener:
-            spinner.start("Thinking…")
+            spinner.start(t(locale, "repl.spinner.thinking"))
 
             for event in engine.submit(user_input):
                 if streaming and listener.check_esc_nonblocking():
                     spinner.stop()
                     engine.cancel_turn()
-                    console.print("\n[dim yellow]⏹ Turn cancelled (Esc)[/dim yellow]")
+                    console.print(f"\n[dim yellow]{t(locale, 'repl.turn_cancelled_esc')}[/dim yellow]")
                     return
 
                 if event[0] == "text":
@@ -431,7 +444,7 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
                 elif event[0] == "waiting":
                     streaming = False
                     listener.resume()
-                    spinner.start("Preparing tool call…")
+                    spinner.start(t(locale, "repl.spinner.preparing_tool"))
 
                 elif event[0] == "tool_call":
                     spinner.stop()
@@ -449,7 +462,7 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
                         console.print(f"  [red]{result.content[:300]}[/red]")
                     streaming = False
                     listener.resume()
-                    spinner.start("Thinking…")
+                    spinner.start(t(locale, "repl.spinner.thinking"))
                     first_text = True
 
                 elif event[0] == "error":
@@ -461,7 +474,7 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
         spinner.stop()
         if not isinstance(sys.exc_info()[1], AbortedError):
             engine.cancel_turn()
-        console.print("\n[dim yellow]⏹ Turn cancelled[/dim yellow]")
+        console.print(f"\n[dim yellow]{t(locale, 'repl.turn_cancelled')}[/dim yellow]")
         return
     finally:
         spinner.stop()
@@ -473,18 +486,28 @@ def run_query(engine: Engine, user_input: str | list, print_mode: bool,
 
 
 def _run_dream(engine: Engine, memory_dir: Path,
-               permissions: PermissionChecker) -> None:
+               permissions: PermissionChecker,
+               locale: str = DEFAULT_LOCALE) -> None:
     """Run dream consolidation: snapshot messages, submit dream prompt, restore."""
     console.print("[dim]Starting dream consolidation…[/dim]")
     saved_messages = list(engine.messages)
     engine.messages = []
     dream_prompt = build_dream_prompt(memory_dir)
-    run_query(engine, dream_prompt, print_mode=False, permissions=permissions)
+    run_query(engine, dream_prompt, print_mode=False, permissions=permissions, locale=locale)
     engine.messages = saved_messages
     # Rebuild system prompt to pick up updated MEMORY.md
     engine.system_prompt = build_system_prompt(memory_dir=memory_dir)
     record_consolidation(memory_dir)
     console.print("[dim]Dream consolidation complete. Memory index updated.[/dim]")
+
+
+def _load_startup_locale(cwd: str) -> str:
+    """Restore the most recent locale for the current workspace, if available."""
+    sessions = SessionStore.list_sessions(cwd)
+    if not sessions:
+        return DEFAULT_LOCALE
+    restored = normalize_locale(sessions[0].locale)
+    return restored or DEFAULT_LOCALE
 
 
 def main() -> None:
@@ -607,12 +630,24 @@ def main() -> None:
 
     # Session & compact services
     cost_tracker = CostTracker()
+    session_locale = [_load_startup_locale(cwd)]
     session_store: SessionStore | None = None
+
+    def _set_session_locale(value: str | None) -> None:
+        normalized = normalize_locale(value) or DEFAULT_LOCALE
+        session_locale[0] = normalized
+        if session_store is not None:
+            session_store.locale = normalized
+
+    def _translate(key: str, **kwargs) -> str:
+        return t(session_locale[0], key, **kwargs)
+
     if not args.print:
         session_store = SessionStore(
             cwd=cwd,
             model=app_config.model,
             mode=current_session_mode(),
+            locale=session_locale[0],
         )
 
     engine = Engine(
@@ -662,11 +697,13 @@ def main() -> None:
             if msgs:
                 warning = _apply_session_mode(meta.mode if meta is not None else None)
                 engine.set_messages(msgs)
+                _set_session_locale(meta.locale if meta is not None else None)
                 session_store = SessionStore(
                     cwd=cwd,
                     model=app_config.model,
                     session_id=target.session_id,
                     mode=current_session_mode(),
+                    locale=session_locale[0],
                 )
                 engine.set_session_store(session_store)
                 console.print(f"[green]✓[/green] Resumed: {target.title[:50]}  "
@@ -774,7 +811,7 @@ def main() -> None:
                 return
             for notification in notifications:
                 console.print("\n[dim]Worker update received.[/dim]")
-                run_query(engine, notification, print_mode=False, permissions=permissions)
+                run_query(engine, notification, print_mode=False, permissions=permissions, locale=session_locale[0])
 
     while True:
         _drain_worker_notifications()
@@ -800,25 +837,26 @@ def main() -> None:
             user_input = _bordered_prompt(
                 console,
                 history=_file_history,
-                completer=_slash_completer,
+                completer=_SlashCommandCompleter(locale_getter=lambda: session_locale[0]),
                 animator_toolbar=animator.toolbar_text if animator else None,
                 refresh_interval=0.5 if animator else None,
                 terminal_mode_ref=_terminal_mode_ref,
+                locale=session_locale[0],
             ).strip()
         except KeyboardInterrupt:
             now = time.monotonic()
             if now - last_ctrlc_time <= _DOUBLE_PRESS_TIMEOUT_MS:
                 if animator:
                     animator.stop()
-                console.print("\n[dim]Goodbye.[/dim]")
+                console.print(f"\n[dim]{t(session_locale[0], 'repl.goodbye')}[/dim]")
                 break
             last_ctrlc_time = now
-            console.print("\n[dim yellow]Press Ctrl+C again to exit[/dim yellow]")
+            console.print(f"\n[dim yellow]{t(session_locale[0], 'repl.press_ctrlc_again')}[/dim yellow]")
             continue
         except EOFError:
             if animator:
                 animator.stop()
-            console.print("\n[dim]Goodbye.[/dim]")
+            console.print(f"\n[dim]{t(session_locale[0], 'repl.goodbye')}[/dim]")
             break
         finally:
             if animator:
@@ -843,7 +881,7 @@ def main() -> None:
             _run_shell(user_input[1:].lstrip())
             continue
         if user_input.lower() in ("exit", "quit", "/exit", "/quit"):
-            console.print("[dim]Goodbye.[/dim]")
+            console.print(f"[dim]{t(session_locale[0], 'repl.goodbye')}[/dim]")
             break
         if user_input.startswith("/sandbox"):
             _handle_sandbox_command(user_input, sandbox_mgr, console)
@@ -854,7 +892,7 @@ def main() -> None:
         if cmd is not None:
             cmd_name, cmd_args = cmd
             if cmd_name in ("exit", "quit"):
-                console.print("[dim]Goodbye.[/dim]")
+                console.print(f"[dim]{t(session_locale[0], 'repl.goodbye')}[/dim]")
                 break
             # /buddy is handled separately (companion pet)
             if cmd_name == "buddy":
@@ -864,6 +902,7 @@ def main() -> None:
                     engine._client,
                     console,
                     app_config.buddy_model or app_config.model,
+                    locale=session_locale[0],
                 )
                 # Refresh animator in case companion was just hatched
                 try:
@@ -881,16 +920,20 @@ def main() -> None:
                 compact_service=compact_service,
                 console=console,
                 app_config=app_config,
+                locale=session_locale[0],
                 memory_dir=memory_dir,
                 permissions=permissions,
-                run_dream=lambda: _run_dream(engine, memory_dir, permissions),
+                run_dream=lambda: _run_dream(engine, memory_dir, permissions, locale=session_locale[0]),
                 cost_tracker=cost_tracker,
                 new_session_store=lambda: SessionStore(
                     cwd=cwd,
                     model=app_config.model,
                     mode=current_session_mode(),
+                    locale=session_locale[0],
                 ),
                 reconfigure_mode=_apply_session_mode,
+                translate=_translate,
+                set_locale=_set_session_locale,
             )
             handle_command(cmd_name, cmd_args, cmd_ctx)
             session_store = cmd_ctx.session_store
@@ -936,7 +979,7 @@ def main() -> None:
         if _companion_addressed:
             continue
 
-        run_query(engine, _parse_input(user_input), print_mode=False, permissions=permissions)
+        run_query(engine, _parse_input(user_input), print_mode=False, permissions=permissions, locale=session_locale[0])
         _drain_worker_notifications()
 
         # Fire companion observer in background after each turn
