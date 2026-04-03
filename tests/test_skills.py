@@ -67,6 +67,26 @@ class TestParseFrontmatter:
         assert meta["name"] == "quoted name"
         assert meta["desc"] == "single"
 
+    def test_quoted_values_with_commas(self):
+        """Quoted strings containing commas should NOT be split into lists."""
+        meta, _ = _parse_frontmatter(
+            '---\n'
+            'name: my-skill\n'
+            'description: "Hello, world!"\n'
+            'note: \'This has, multiple, commas\'\n'
+            '---\nbody'
+        )
+        assert meta["name"] == "my-skill"
+        assert meta["description"] == "Hello, world!"
+        assert meta["note"] == "This has, multiple, commas"
+
+    def test_unquoted_comma_becomes_list(self):
+        """Unquoted values with commas should be split into lists."""
+        meta, _ = _parse_frontmatter(
+            "---\nallowed-tools: Bash, Read, Grep\n---\nbody"
+        )
+        assert meta["allowed_tools"] == ["Bash", "Read", "Grep"]
+
     def test_boolean_variants(self):
         meta, _ = _parse_frontmatter(
             "---\na: yes\nb: no\nc: True\nd: False\n---\n"

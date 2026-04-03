@@ -96,13 +96,13 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             meta[key] = True
         elif val.lower() in ("false", "no"):
             meta[key] = False
-        # List (comma-separated)
-        elif "," in val:
-            meta[key] = [v.strip() for v in val.split(",") if v.strip()]
-        # Quoted string
+        # Quoted string (check BEFORE comma to avoid splitting "Hello, world!")
         elif (val.startswith('"') and val.endswith('"')) or \
              (val.startswith("'") and val.endswith("'")):
             meta[key] = val[1:-1]
+        # List (comma-separated)
+        elif "," in val:
+            meta[key] = [v.strip() for v in val.split(",") if v.strip()]
         else:
             meta[key] = val
 
@@ -110,7 +110,11 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
 
 def _ensure_str(val: Any, default: str = "") -> str:
-    """Coerce *val* to a string — rejoin lists produced by the frontmatter parser."""
+    """Coerce *val* to a string.
+
+    Safety net for unexpected types from frontmatter parser.
+    Handles edge cases like None values or lists from legacy parsing.
+    """
     if val is None:
         return default
     if isinstance(val, list):

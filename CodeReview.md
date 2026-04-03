@@ -129,3 +129,29 @@ if isinstance(val, list):
 ## Conclusion
 
 This is a reasonable defensive fix that prevents type errors when frontmatter metadata doesn't match expected types. The main concern is that the fix works around potential issues in the frontmatter parser rather than addressing them at the source. Consider reviewing `_parse_frontmatter()` to ensure quoted strings with commas are handled correctly.
+
+---
+
+## Fix Applied (2026-04-03)
+
+### Problem
+The frontmatter parser checked for commas **before** checking for quoted strings, causing values like `"Hello, world!"` to be incorrectly parsed as a list `["Hello", "world!"]`.
+
+### Solution
+Reordered the parsing logic in `_parse_frontmatter()` to check for quoted strings **before** checking for commas:
+
+```python
+# Before (incorrect order):
+# 1. Boolean
+# 2. List (comma-separated)  ← checked first
+# 3. Quoted string           ← checked after
+
+# After (correct order):
+# 1. Boolean
+# 2. Quoted string           ← checked first
+# 3. List (comma-separated)  ← checked after
+```
+
+### Tests Added
+- `test_quoted_values_with_commas`: Verifies that quoted strings containing commas are preserved as strings
+- `test_unquoted_comma_becomes_list`: Verifies that unquoted comma-separated values still become lists
