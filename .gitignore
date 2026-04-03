@@ -9,6 +9,7 @@ build/
 .venv/
 venv/
 env/
+docs/reviews/
 
 .pytest_cache/
 .mypy_cache/

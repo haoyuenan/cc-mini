@@ -40,8 +40,15 @@ def _buddy_rarity_label(rarity: str, locale: str = DEFAULT_LOCALE) -> str:
     return t(locale, f'buddy.rarity.{rarity}')
 
 
+def _buddy_shiny_tag(shiny: bool, locale: str = DEFAULT_LOCALE, excited: bool = False) -> str:
+    if not shiny:
+        return ''
+    key = 'buddy.render.shiny.excited' if excited else 'buddy.render.shiny'
+    return t(locale, key)
+
+
 def _buddy_card_identity_line(name: str, species: str, shiny: bool, locale: str = DEFAULT_LOCALE) -> str:
-    shiny_tag = ' ✨ SHINY' if shiny and locale != 'zh-CN' else (' ✨ 闪光' if shiny else '')
+    shiny_tag = _buddy_shiny_tag(shiny, locale)
     return t(locale, 'buddy.render.card.identity', name=name, species=species, shiny_tag=shiny_tag)
 
 
@@ -91,7 +98,7 @@ def _buddy_list_column_face(locale: str = DEFAULT_LOCALE) -> str:
 
 
 def _buddy_hatch_reveal_line(name: str, stars: str, shiny: bool, locale: str = DEFAULT_LOCALE) -> str:
-    shiny_tag = ' ✨ SHINY!' if shiny and locale != 'zh-CN' else (' ✨ 闪光！' if shiny else '')
+    shiny_tag = _buddy_shiny_tag(shiny, locale, excited=True)
     return t(locale, 'buddy.render.hatch.reveal', name=name, stars=stars, shiny_tag=shiny_tag)
 
 

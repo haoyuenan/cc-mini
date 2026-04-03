@@ -209,7 +209,7 @@ def _auto_dream_triggered_message(locale: str) -> str:
 
 
 def _yes_no_label(value: bool, locale: str) -> str:
-    return "是" if locale == "zh-CN" and value else "否" if locale == "zh-CN" else ("yes" if value else "no")
+    return t(locale, "repl.value.yes" if value else "repl.value.no")
 
 
 def _sandbox_status_title(locale: str) -> str:

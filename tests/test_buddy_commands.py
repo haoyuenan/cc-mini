@@ -116,8 +116,13 @@ def test_buddy_list_messages_are_localized_to_chinese():
 
 
 def test_buddy_rarity_and_hatch_reveal_messages_are_localized_to_chinese():
-    from core.buddy.render import _buddy_rarity_label, _buddy_hatch_reveal_line
+    from core.buddy.render import _buddy_rarity_label, _buddy_hatch_reveal_line, _buddy_shiny_tag
 
     assert _buddy_rarity_label("legendary", "zh-CN") == "传说"
     assert _buddy_rarity_label("common", "zh-CN") == "普通"
+    assert _buddy_shiny_tag(False, "zh-CN", excited=False) == ""
+    assert _buddy_shiny_tag(True, "zh-CN", excited=False) == " ✨ 闪光"
+    assert _buddy_shiny_tag(True, "zh-CN", excited=True) == " ✨ 闪光！"
+    assert _buddy_shiny_tag(True, "en", excited=False) == " ✨ SHINY"
+    assert _buddy_shiny_tag(True, "en", excited=True) == " ✨ SHINY!"
     assert "团子 已孵化！" in _buddy_hatch_reveal_line("团子", "★★", True, "zh-CN")

@@ -261,6 +261,15 @@ def test_sandbox_status_messages_are_localized_to_chinese():
     assert "排除命令" in _sandbox_excluded_commands_title("zh-CN")
 
 
+def test_yes_no_label_is_localized_without_hardcoding_call_sites():
+    from core.main import _yes_no_label
+
+    assert _yes_no_label(True, "zh-CN") == "是"
+    assert _yes_no_label(False, "zh-CN") == "否"
+    assert _yes_no_label(True, "en") == "yes"
+    assert _yes_no_label(False, "en") == "no"
+
+
 def test_sandbox_setup_messages_are_localized_to_chinese():
     from core.main import (
         _sandbox_configure_title,
