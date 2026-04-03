@@ -51,7 +51,7 @@ The entire core is `~1000 lines of Python`
 
 ### Requirements
 
-- Python 3.10+ (3.11+ recommended)
+- Python 3.11+
 - An API key for [Anthropic](https://console.anthropic.com/) or any OpenAI-compatible provider
 
 ### Install
@@ -119,6 +119,8 @@ Running skill: /review…
 ```
 
 [Full configuration docs &rarr;](docs/configuration.md)
+
+[Build and rebuild guide &rarr;](docs/build.md)
 
 ---
 
@@ -196,6 +198,7 @@ pytest tests/ -v -k "not integration"  # skip bwrap tests
 
 | Topic | Link |
 |-------|------|
+| Build / rebuild / packaging | [docs/build.md](docs/build.md) |
 | Configuration (API keys, TOML, CLI flags) | [docs/configuration.md](docs/configuration.md) |
 | Buddy (AI companion pet) | [docs/buddy.md](docs/buddy.md) |
 | Coordinator Mode (background workers) | [docs/coordinator.md](docs/coordinator.md) |
