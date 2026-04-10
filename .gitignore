@@ -27,3 +27,5 @@ plan.md
 CLAUDE.md
 
 .cc-mini.toml
+/.omc/project-memory.json
+/.omc/state/hud-stdin-cache.json
